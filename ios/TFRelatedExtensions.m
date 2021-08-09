@@ -7,6 +7,12 @@
 
 #import "TFRelatedExtensions.h"
 
+void SafeLog(NSString *str) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSLog(@"%@", str);
+    });
+}
+
 @implementation UIImage (TFRelatedExtensions)
 -(UIImage *)scaledImageWithSize:(CGSize)size  {
     UIGraphicsBeginImageContextWithOptions(size, NO, self.scale);
@@ -16,7 +22,9 @@
     return image;
 }
 -(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized {
+    SafeLog(@"I Should be logged, always");
     if(!self.CGImage) {
+        SafeLog(@"I don't have CGIMAGE");
         return nil;
     }
     return [UIImage normalizedDataFromImage:self.CGImage resizingToSize:size];
@@ -46,8 +54,8 @@
     int width = size.width;
     unsigned long scaledBytesPerRow = (CGImageGetBytesPerRow(image) / CGImageGetWidth(image)) * width;
     // Create a bitmap context
-    CGContextRef context = CGBitmapContextCreate(nil, width, (int)size.height, CGImageGetBitsPerComponent(image), scaledBytesPerRow, colorSpace, bitmapInfo);
-    if(!context) return NULL;
+    CGContextRef context = CGBitmapContextCreate(NULL, width, (int)size.height, CGImageGetBitsPerComponent(image), scaledBytesPerRow, colorSpace, bitmapInfo);
+    if(!context) { SafeLog(@"Failed to create CGContextRef"); return NULL;}
     CGContextDrawImage(context, CGRectMake(0, 0, size.width, size.height), image);
     CGImageRef createdImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
@@ -58,12 +66,15 @@
 +(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size {
     CGImageRef normalizedImage = [self normalizeImage:image resizingToSize:size];
     if(!normalizedImage) {
+        SafeLog(@"NormalizedImage result was nil");
         return nil;
     }
+    CGImageRetain(normalizedImage);
     CGDataProviderRef dataProvider = CGImageGetDataProvider(normalizedImage);
     CFDataRef data = CGDataProviderCopyData(dataProvider);
     CGDataProviderRelease(dataProvider);
-    if(!data) { return nil; };
+    CGImageRelease(normalizedImage);
+    if(!data) { SafeLog(@"Failed to get data from image"); return nil; };
     
     size_t bitsPerPixel = CGImageGetBitsPerPixel(normalizedImage);
     size_t bitsPerComponent = CGImageGetBitsPerComponent(normalizedImage);
@@ -83,8 +94,8 @@
             // 16-bit pixel with no alpha channel. On iOS, this must have 5 bits per channel and
             // no alpha channel. The most significant bits are skipped.
         case 16: {
-            if(bitsPerComponent != 5) break;
-            if((imageAlphaInfo & kCGImageAlphaNoneSkipFirst) == 0) break;
+            if(bitsPerComponent != 5) { SafeLog(@"BitsPerComponent not 5"); break;}
+            if((imageAlphaInfo & kCGImageAlphaNoneSkipFirst) == 0) { SafeLog(@"imageAlphaInfo does not have kCGImageAlphaNoneSkipFirst"); break;}
             
             // If this bool is false, assume little endian byte order.
             /** The endianness of this machine */
@@ -114,7 +125,6 @@
             UInt16 redMask   = 0b0111110000000000;
             UInt16 greenMask  = 0b0000001111100000;
             UInt16 blueMask   = 0b0000000000011111;
-            outData = [NSData dataWithBytes:nil length:dataLength * 2/3];
             // We allocate 3/2 of the data length because..
             //  1. The original data is 16 bits for RGB color (5 bits per RGB channel)
             // 2. Tensorflow expects Float32 data out in format of RGB (Float32 per channel)
@@ -154,10 +164,11 @@
             // We discard the image's alpha channel before running the TF Lite model, so we can treat
             // alpha and non-alpha images identically.
             outData = [NSData dataWithBytes:outBytes length:totalAlloc];
+            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
             free(outBytes);
         } break;
         case 32: {
-            if(bitsPerComponent != 8) break;
+            if(bitsPerComponent != 8){ SafeLog(@"BitsPerComponent not 8"); break;}
             BOOL alphaFirst = (
                                imageAlphaInfo == kCGImageAlphaNoneSkipFirst
                                || imageAlphaInfo == kCGImageAlphaPremultipliedFirst
@@ -170,8 +181,8 @@
             /** The endianness of this machine */
             BOOL bigEndian = ((bitmapInfo & kCGBitmapByteOrder32Big) != 0);
             BOOL littleEndian = ((bitmapInfo & kCGBitmapByteOrder32Little) != 0);
-            if(!(alphaFirst || alphaLast)) break;
-            if(!(bigEndian || littleEndian)) break;
+            if(!(alphaFirst || alphaLast)){ SafeLog(@"Could not deterine Image alpha format"); break;}
+            if(!(bigEndian || littleEndian)) { SafeLog(@"Could not determine endianness of image"); break;}
             //            int numberOfChannels = 4;
             UInt8 alphaOffset, redOffset, greenOffset, blueOffset;
             if(bigEndian) {
@@ -190,6 +201,7 @@
             CFIndex dataLength = CFDataGetLength(data);
             // We have 3 Float32 channels (RGB) out, while the input was Int32 for RGBA.
             size_t allocLen = sizeof(Float32) * 3 * dataLength / 4;
+            NSLog(@"datalen %d, allocating %d", dataLength, allocLen);
             Float32 *outBytes = malloc(allocLen);
             
             Float32 maximumChannelValue = 255; // 2 ^ 8 - 1
@@ -215,9 +227,10 @@
             }
             outData = [NSData dataWithBytes:outBytes length:allocLen];
             free(outBytes);
+            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
         } break;
         default:{
-            NSLog(@"Unsupported format from image");}
+            SafeLog(@"Unsupported format from image");}
     }
     CFRelease(data);
     return outData;

@@ -44,6 +44,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
         reject(@"NO_FILE_PATHS", @"No file paths specified", error);
         return;
     }
+    if([modelPath hasPrefix:@"file://"]) {
+        modelPath = [modelPath substringFromIndex:7];
+    }
+    
     TFLInterpreter *interpreter = [[TFLInterpreter alloc] initWithModelPath:modelPath
                                                                       error:&error];
     if (error != nil) { /* Error handling... */
@@ -79,7 +83,24 @@ RCT_REMAP_METHOD(runModelWithFiles,
                        error);
                 return;
             }
-            UIImage *image = [UIImage imageWithContentsOfFile:filePath];
+            NSString *actualFilePath;
+            if([filePath hasPrefix:@"file://"]) {
+                actualFilePath = [filePath substringFromIndex:7];
+            }
+            else {
+                actualFilePath = filePath;
+            }
+            UIImage *image = [UIImage imageWithContentsOfFile:actualFilePath];
+            if(!image) {
+                NSLog(@"No image found at given path");
+                if(error) {
+                    reject(
+                           @"TF_IMAGE_NOT_FOUND",
+                           [NSString stringWithFormat:@"Image not found at path %@", filePath],
+                           error);
+                    return;
+                }
+            }
             CGSize shape;
             if(shapes) {
                 shape = CGSizeMake(shapes[i][0].integerValue, shapes[i][1].integerValue);
@@ -93,11 +114,23 @@ RCT_REMAP_METHOD(runModelWithFiles,
                            error);
                     return;
                 }
-                shape.width = tensorshape[0].intValue;
-                shape.height = tensorshape[1].intValue;
+//                NSLog(@"tensor input shape is %@", tensorshape);
+                // This logs out (1, 192, 192, 3)
+//                shape.width = tensorshape[0].intValue;
+//                shape.height = tensorshape[1].intValue;
+                // TODO: MAKE THIS SMARTER NOT THIS DUMB
+                if(tensorshape.count > 3) {
+                    shape.width = tensorshape[1].intValue;
+                    shape.height = tensorshape[2].intValue;
+                }
+                else {
+                    shape.width = tensorshape[0].intValue;
+                    shape.height = tensorshape[1].intValue;
+                }
             }
-            NSData *data = [image scaledDataWithSize:shape isQuantized: NO];
-            NSLog(@"Copying for tensor at index %lu", i);
+            NSData *data = [image scaledDataWithSize:shape isQuantized:NO];
+            NSLog(@"Tensor %lu, datatype is %d", i, [tensor dataType]);
+            NSLog(@"Data object is len %d, %@", data.length, data);
             [tensor copyData:data error:&error];
             if(error != nil) {
                 reject(
@@ -107,6 +140,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 return;
             }
         }
+        NSLog(@"about to run interpreter");
         BOOL ok = [interpreter invokeWithError:&error];
         if(!ok || (error != nil)) {
             reject(
@@ -117,7 +151,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
         }
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
-        
+        NSLog(@"Finished running interpreter");
         NSMutableArray <NSDictionary *>*outTensors = [NSMutableArray new];
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
@@ -208,6 +242,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
         }
         [batchOutput addObject:outTensors];
     }
+    NSLog(@"finished");
     resolve(batchOutput);
 }
 
