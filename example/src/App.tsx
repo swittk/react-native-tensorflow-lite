@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { StyleSheet, View, Text, Alert, Button, Image, ScrollView } from 'react-native';
-import TensorflowLite, { SKTFLiteTensorResult } from 'react-native-tensorflow-lite';
+import TensorflowLite, { SKTFLiteTensorResult } from '@switt/react-native-tensorflow-lite';
 import { Asset } from 'expo-asset';
 import * as ImagePicker from 'expo-image-picker';
 

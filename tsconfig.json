@@ -2,7 +2,7 @@
   "compilerOptions": {
     "baseUrl": "./",
     "paths": {
-      "react-native-tensorflow-lite": ["./src/index"]
+      "@switt/react-native-tensorflow-lite": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
