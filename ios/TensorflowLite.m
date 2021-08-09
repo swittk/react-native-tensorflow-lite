@@ -161,8 +161,6 @@ RCT_REMAP_METHOD(runModelWithFiles,
         NSLog(@"Finished running interpreter");
         NSMutableDictionary *outTensors = [NSMutableDictionary new];
         outTensors[@"length"] = @(outTensorCount);
-        outTensors[@"data"] = [NSMutableDictionary new];
-        outTensors[@"shape"] = [NSMutableDictionary new];
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
             TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
@@ -246,10 +244,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 } break;
             }
             // Even if we comment out data, the react native bridge still crashes
-//            outTensors[@"data"][@(i)] = outData;
+            outTensors[[NSString stringWithFormat:@"data%ld", i]] = outData;
             // When componentsJoinedByString is used, then crash no longer occurs
             // Seems like react native really has a problem with array of numbers inside other stuff
-            outTensors[@"shape"][@(i)] = [shape componentsJoinedByString:@","];
+            outTensors[[NSString stringWithFormat:@"shape%ld", i]] = shape;
         }
         [batchOutput setObject:outTensors forKey:@(inputIndex)];
     }

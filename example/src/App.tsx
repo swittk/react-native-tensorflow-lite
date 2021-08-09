@@ -34,6 +34,24 @@ export default class App extends React.PureComponent<Props, State> {
       Alert.alert(`Run failed with error ${e.message || e.code} (${JSON.stringify(e)})`)
     }
   }
+  runModelFiveTimes = async () => {
+    const { imageUri } = this.state;
+    if (!imageUri) {
+      Alert.alert('No Image selected');
+      return;
+    }
+    const modelAsset = Asset.fromModule(require('./face_landmark.tflite'));
+    if (!modelAsset.downloaded) { await modelAsset.downloadAsync() };
+    try {
+      const results = await TensorflowLite.runModelWithFiles({
+        model: modelAsset.localUri!,
+        files: [imageUri, imageUri, imageUri, imageUri, imageUri]
+      });
+      this.setState({ results });
+    } catch (e) {
+      Alert.alert(`Run failed with error ${e.message || e.code} (${JSON.stringify(e)})`)
+    }
+  }
 
   pickImage = async () => {
     let { status, canAskAgain } = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -69,6 +87,7 @@ export default class App extends React.PureComponent<Props, State> {
         <ScrollView style={{ flex: 1 }}>
           <Button title="Pick image" onPress={this.pickImage} />
           <Button title="Run model" onPress={this.runModel} />
+          <Button title="Run model 5 times" onPress={this.runModelFiveTimes} />
           <Image source={{ uri: imageUri }} style={{ width: 320, height: 320 }} resizeMode='contain' />
           <Text>Result: {JSON.stringify(results)}</Text>
         </ScrollView>
