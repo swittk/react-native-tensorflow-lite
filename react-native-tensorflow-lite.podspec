@@ -16,4 +16,6 @@ Pod::Spec.new do |s|
   s.source_files = "ios/**/*.{h,m,mm}"
 
   s.dependency "React-Core"
+  s.dependency 'TensorFlowLiteObjC', '~> 2.4.0'
+  s.dependency 'TensorFlowLiteObjC/Metal', '~> 2.4.0'
 end
