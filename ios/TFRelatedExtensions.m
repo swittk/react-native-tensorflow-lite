@@ -30,6 +30,9 @@ void SafeLog(NSString *str) {
     return [UIImage normalizedDataFromImage:self.CGImage resizingToSize:size];
 }
 +(CGImageRef)normalizeImage:(CGImageRef)image resizingToSize:(CGSize)size {
+    CGImageRetain(image);
+    // Don't forget to release the image before ALL returns
+    
     // The TF Lite model expects images in the RGB color space.
     // Device-specific RGB color spaces should have the same number of colors as the standard
     // RGB color space so we probably don't have to redraw them.
@@ -43,11 +46,16 @@ void SafeLog(NSString *str) {
         BOOL colorspaceNameIsSRGB = CFStringCompare(imageColorspace, kCGColorSpaceSRGB, 0) == kCFCompareEqualTo;
         CFRelease(imageColorspace);
         CFRelease(deviceColorSpaceName);
+        CFRelease(colorSpace);
         if(colorspaceSameAsDevice || colorspaceNameIsSRGB) {
             // Return the image if it is in the right format
             // to save a redraw operation.
+            CFAutorelease(image);
             return image;
         }
+    }
+    else {
+        CFRelease(colorSpace);
     }
     
     CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
@@ -55,10 +63,15 @@ void SafeLog(NSString *str) {
     unsigned long scaledBytesPerRow = (CGImageGetBytesPerRow(image) / CGImageGetWidth(image)) * width;
     // Create a bitmap context
     CGContextRef context = CGBitmapContextCreate(NULL, width, (int)size.height, CGImageGetBitsPerComponent(image), scaledBytesPerRow, colorSpace, bitmapInfo);
-    if(!context) { SafeLog(@"Failed to create CGContextRef"); return NULL;}
+    if(!context) {
+        SafeLog(@"Failed to create CGContextRef");
+        CGImageRelease(image);
+        return nil;
+    }
     CGContextDrawImage(context, CGRectMake(0, 0, size.width, size.height), image);
     CGImageRef createdImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
+    CGImageRelease(image);
     CFAutorelease(createdImage);
     return createdImage;
 }
@@ -72,9 +85,11 @@ void SafeLog(NSString *str) {
     CGImageRetain(normalizedImage);
     CGDataProviderRef dataProvider = CGImageGetDataProvider(normalizedImage);
     CFDataRef data = CGDataProviderCopyData(dataProvider);
-    CGDataProviderRelease(dataProvider);
+//    CGDataProviderRelease(dataProvider); // Likely cause of error : "Get"DataProvider = we shouldn't free it.
     CGImageRelease(normalizedImage);
     if(!data) { SafeLog(@"Failed to get data from image"); return nil; };
+    // After here we shall not return before the end of the function
+    // Because data must be freed.
     
     size_t bitsPerPixel = CGImageGetBitsPerPixel(normalizedImage);
     size_t bitsPerComponent = CGImageGetBitsPerComponent(normalizedImage);
@@ -163,9 +178,8 @@ void SafeLog(NSString *str) {
             // Note From Tensorflow implementation:
             // We discard the image's alpha channel before running the TF Lite model, so we can treat
             // alpha and non-alpha images identically.
-            outData = [NSData dataWithBytes:outBytes length:totalAlloc];
+            outData = [NSData dataWithBytesNoCopy:outBytes length:totalAlloc];
             SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
-            free(outBytes);
         } break;
         case 32: {
             if(bitsPerComponent != 8){ SafeLog(@"BitsPerComponent not 8"); break;}
@@ -225,12 +239,12 @@ void SafeLog(NSString *str) {
                 outBytes[outBytesIndex + 2] = blue;
                 outBytesIndex += 3;
             }
-            outData = [NSData dataWithBytes:outBytes length:allocLen];
-            free(outBytes);
+            outData = [NSData dataWithBytesNoCopy:outBytes length:allocLen];
             SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
         } break;
         default:{
-            SafeLog(@"Unsupported format from image");}
+            SafeLog(@"Unsupported format from image");
+        }
     }
     CFRelease(data);
     return outData;

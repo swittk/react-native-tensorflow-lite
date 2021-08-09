@@ -5,7 +5,10 @@
 //#import "UIImage-Swift.h"
 
 @implementation TensorflowLite
-
+- (dispatch_queue_t)methodQueue
+{
+    return dispatch_get_main_queue();
+}
 RCT_EXPORT_MODULE()
 
 // Example method
@@ -156,10 +159,14 @@ RCT_REMAP_METHOD(runModelWithFiles,
                    error);
             return;
         }
+        
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
         NSLog(@"Finished running interpreter");
         NSMutableDictionary *outTensors = [NSMutableDictionary new];
+        // With this implementation it doesn't crash with only one image supplied however..
+        // now this is weird, if we call model only once then it does not crash, call it five times however, and it crashes again at the React native bridge
+        // Maybe it's something to do with sizes of values that are passed through the bridge then.
         outTensors[@"length"] = @(outTensorCount);
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
@@ -251,7 +258,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
         }
         [batchOutput setObject:outTensors forKey:@(inputIndex)];
     }
-    NSLog(@"finished %@", batchOutput);
+    NSLog(@"finished %d", batchOutput.count);
     
     /*
      Note here: The reason for choosing this data output format.
@@ -260,10 +267,11 @@ RCT_REMAP_METHOD(runModelWithFiles,
      
      Solution : Send dict of arrays
      */
-    //    resolve(batchOutput);
-        dispatch_async(dispatch_get_main_queue(), ^{
     resolve(batchOutput);
-        });
+    //        dispatch_async(dispatch_get_main_queue(), ^{
+    //    resolve(batchOutput);
+    //        });
+    //    resolve(nil);
 }
 
 
