@@ -13,7 +13,9 @@ export type SKTFLiteRunModelWithFilesArg = {
 export type SKTFLiteTensorResult = SKTFLiteSingleTensorResult[];
 
 export type SKTFLiteSingleTensorResult = {
+  /** The supposed shape of this tensor (e.g. (1,192,192,3)) */
   shape: number[],
+  /** The data of this tensor */
   data: number[]
 }
 
@@ -22,9 +24,9 @@ type TensorflowLiteType = {
   /**
    * 
    * @param params 
-   * @returns Raw number values of each output tensor, the shapes are not preserved
+   * @returns Array corresponding to input files, each entry contains the output array of tensors from the model, the data field is simply a number array, while the shape is stored in the shape field.
    */
-  runModelWithFiles(params: SKTFLiteRunModelWithFilesArg): Promise<SKTFLiteTensorResult>
+  runModelWithFiles(params: SKTFLiteRunModelWithFilesArg): Promise<SKTFLiteTensorResult[]>
 };
 
 const { TensorflowLite } = NativeModules;

@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 type Props = {};
 type State = {
   imageUri?: string,
-  results?: SKTFLiteTensorResult
+  results?: SKTFLiteTensorResult[]
 }
 export default class App extends React.PureComponent<Props, State> {
   constructor(props: Props) {
