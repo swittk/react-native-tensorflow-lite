@@ -4,7 +4,12 @@
 #import "TFRelatedExtensions.h"
 //#import "UIImage-Swift.h"
 
-@implementation TensorflowLite
+@implementation TensorflowLite {
+    // Potentially allow for multiple interpreters
+    TFLInterpreter *interp1;
+    TFLInterpreter *interp2;
+    TFLInterpreter *interp3;
+}
 
 RCT_EXPORT_MODULE()
 
