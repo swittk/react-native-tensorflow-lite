@@ -80,8 +80,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
      element keys are "length", "data", "shape"
      ( length = number of tensors, data = Record<number, number[]>, shape = number[] )
      */
-    NSMutableDictionary *batchOutput = [NSMutableDictionary new];
-    batchOutput[@"length"] = @(filePaths.count);
+    NSMutableArray *batchOutput = [NSMutableArray new];
     for(NSUInteger inputIndex = 0; inputIndex < filePaths.count; inputIndex++) {
         NSString *filePath = filePaths[inputIndex];
         for(NSUInteger i = 0; i < tensorCount; i++) {
@@ -139,8 +138,8 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 }
             }
             NSData *data = [image scaledDataWithSize:shape isQuantized:NO];
-            NSLog(@"Tensor %lu, datatype is %d", i, [tensor dataType]);
-            NSLog(@"Data object is len %d, %@", data.length, data);
+//            NSLog(@"Tensor %lu, datatype is %d", i, [tensor dataType]);
+//            NSLog(@"Data object is len %d, %@", data.length, data);
             [tensor copyData:data error:&error];
             if(error != nil) {
                 reject(
@@ -150,7 +149,6 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 return;
             }
         }
-        NSLog(@"about to run interpreter");
         BOOL ok = [interpreter invokeWithError:&error];
         if(!ok || (error != nil)) {
             reject(
@@ -162,12 +160,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
         
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
-        NSLog(@"Finished running interpreter");
-        NSMutableDictionary *outTensors = [NSMutableDictionary new];
+        NSMutableArray *outTensors = [NSMutableArray new];
         // With this implementation it doesn't crash with only one image supplied however..
         // now this is weird, if we call model only once then it does not crash, call it five times however, and it crashes again at the React native bridge
         // Maybe it's something to do with sizes of values that are passed through the bridge then.
-        outTensors[@"length"] = @(outTensorCount);
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
             TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
@@ -250,28 +246,14 @@ RCT_REMAP_METHOD(runModelWithFiles,
                     return;
                 } break;
             }
-            // Even if we comment out data, the react native bridge still crashes
-            outTensors[[NSString stringWithFormat:@"data%ld", i]] = outData;
-            // When componentsJoinedByString is used, then crash no longer occurs
-            // Seems like react native really has a problem with array of numbers inside other stuff
-            outTensors[[NSString stringWithFormat:@"shape%ld", i]] = shape;
+            [outTensors addObject:@{
+                @"shape": shape,
+                @"data": outData
+            }];
         }
-        [batchOutput setObject:outTensors forKey:@(inputIndex)];
+        [batchOutput addObject:outTensors];
     }
-    NSLog(@"finished %d", batchOutput.count);
-    
-    /*
-     Note here: The reason for choosing this data output format.
-     Originally tried to send over Array of Array<BatchOutput> (Outermost array = each file, inner one = each output tensor from each file)
-     But this crashes the app. Maybe react native doesn't support array of dicts in array.
-     
-     Solution : Send dict of arrays
-     */
     resolve(batchOutput);
-    //        dispatch_async(dispatch_get_main_queue(), ^{
-    //    resolve(batchOutput);
-    //        });
-    //    resolve(nil);
 }
 
 

@@ -22,7 +22,7 @@ void SafeLog(NSString *str) {
     return image;
 }
 -(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized {
-    SafeLog(@"I Should be logged, always");
+//    SafeLog(@"I Should be logged, always");
     if(!self.CGImage) {
         SafeLog(@"I don't have CGIMAGE");
         return nil;
@@ -179,7 +179,7 @@ void SafeLog(NSString *str) {
             // We discard the image's alpha channel before running the TF Lite model, so we can treat
             // alpha and non-alpha images identically.
             outData = [NSData dataWithBytesNoCopy:outBytes length:totalAlloc];
-            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
+//            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
         } break;
         case 32: {
             if(bitsPerComponent != 8){ SafeLog(@"BitsPerComponent not 8"); break;}
@@ -215,7 +215,6 @@ void SafeLog(NSString *str) {
             CFIndex dataLength = CFDataGetLength(data);
             // We have 3 Float32 channels (RGB) out, while the input was Int32 for RGBA.
             size_t allocLen = sizeof(Float32) * 3 * dataLength / 4;
-            NSLog(@"datalen %d, allocating %d", dataLength, allocLen);
             Float32 *outBytes = malloc(allocLen);
             
             Float32 maximumChannelValue = 255; // 2 ^ 8 - 1
@@ -240,11 +239,11 @@ void SafeLog(NSString *str) {
                 outBytesIndex += 3;
             }
             outData = [NSData dataWithBytesNoCopy:outBytes length:allocLen];
-            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
+//            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
         } break;
         default:{
             SafeLog(@"Unsupported format from image");
-        }
+        } break;
     }
     CFRelease(data);
     return outData;
