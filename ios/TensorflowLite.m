@@ -72,8 +72,15 @@ RCT_REMAP_METHOD(runModelWithFiles,
         reject(@"TF_TENSOR_ALLOC_ERROR", [NSString stringWithFormat:@"Tensor count is %d, only support 1 tensor right now", tensorCount], error);
         return;
     }
-    NSMutableArray *batchOutput = [NSMutableArray new];
-    for(NSString *filePath in filePaths) {
+    /**
+     BatchOutput:: Each element = each input file
+     element keys are "length", "data", "shape"
+     ( length = number of tensors, data = Record<number, number[]>, shape = number[] )
+     */
+    NSMutableDictionary *batchOutput = [NSMutableDictionary new];
+    batchOutput[@"length"] = @(filePaths.count);
+    for(NSUInteger inputIndex = 0; inputIndex < filePaths.count; inputIndex++) {
+        NSString *filePath = filePaths[inputIndex];
         for(NSUInteger i = 0; i < tensorCount; i++) {
             TFLTensor *tensor = [interpreter inputTensorAtIndex:0 error:&error];
             if(error != nil) {
@@ -114,10 +121,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
                            error);
                     return;
                 }
-//                NSLog(@"tensor input shape is %@", tensorshape);
+                //                NSLog(@"tensor input shape is %@", tensorshape);
                 // This logs out (1, 192, 192, 3)
-//                shape.width = tensorshape[0].intValue;
-//                shape.height = tensorshape[1].intValue;
+                //                shape.width = tensorshape[0].intValue;
+                //                shape.height = tensorshape[1].intValue;
                 // TODO: MAKE THIS SMARTER NOT THIS DUMB
                 if(tensorshape.count > 3) {
                     shape.width = tensorshape[1].intValue;
@@ -152,7 +159,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
         NSLog(@"Finished running interpreter");
-        NSMutableArray <NSDictionary *>*outTensors = [NSMutableArray new];
+        NSMutableDictionary *outTensors = [NSMutableDictionary new];
+        outTensors[@"length"] = @(outTensorCount);
+        outTensors[@"data"] = [NSMutableDictionary new];
+        outTensors[@"shape"] = [NSMutableDictionary new];
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
             TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
@@ -235,12 +245,13 @@ RCT_REMAP_METHOD(runModelWithFiles,
                     return;
                 } break;
             }
-            [outTensors addObject:@{
-                @"data": outData,
-                @"shape": shape
-            }];
+            // Even if we comment out data, the react native bridge still crashes
+//            outTensors[@"data"][@(i)] = outData;
+            // When componentsJoinedByString is used, then crash no longer occurs
+            // Seems like react native really has a problem with array of numbers inside other stuff
+            outTensors[@"shape"][@(i)] = [shape componentsJoinedByString:@","];
         }
-        [batchOutput addObject:outTensors];
+        [batchOutput setObject:outTensors forKey:@(inputIndex)];
     }
     NSLog(@"finished %@", batchOutput);
     
@@ -251,10 +262,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
      
      Solution : Send dict of arrays
      */
-//    resolve(batchOutput);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        resolve(batchOutput[0]);
-    });
+    //    resolve(batchOutput);
+        dispatch_async(dispatch_get_main_queue(), ^{
+    resolve(batchOutput);
+        });
 }
 
 
