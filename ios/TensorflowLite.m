@@ -30,7 +30,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
     NSArray <NSString *>*filePaths = argumentsDict[@"files"];
     NSString *fileMode = argumentsDict[@"fileMode"];
     // User-provided shapes for tensors (Optional, can be inferred from the model)
-    NSArray <NSArray *>*shapes = argumentsDict[@"shapes"];
+    NSArray <NSArray <NSNumber *>*>*shapes = argumentsDict[@"shapes"];
     if(fileMode) {
         // TODO: ENABLE FILE MODE FOR BOTH IMAGE AND REGULAR FILE
     }
@@ -82,10 +82,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
             UIImage *image = [UIImage imageWithContentsOfFile:filePath];
             CGSize shape;
             if(shapes) {
-                shape = CGSizeMake(shapes[i][0], shapes[i][1]);
+                shape = CGSizeMake(shapes[i][0].integerValue, shapes[i][1].integerValue);
             }
             else {
-                shape = [tensor shapeWithError:&error];
+                NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
                 if(error) {
                     reject(
                            @"TF_SHAPE_ERROR",
@@ -93,6 +93,8 @@ RCT_REMAP_METHOD(runModelWithFiles,
                            error);
                     return;
                 }
+                shape.width = tensorshape[0].intValue;
+                shape.height = tensorshape[1].intValue;
             }
             NSData *data = [image scaledDataWithSize:shape isQuantized: NO];
             NSLog(@"Copying for tensor at index %lu", i);
@@ -109,7 +111,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
         if(!ok || (error != nil)) {
             reject(
                    @"TF_INVOKE_ERROR",
-                   [NSString stringWithFormat:@"TF Lite invocation failed for tensor at index %lu", i],
+                   [NSString stringWithFormat:@"TF Lite invocation failed for file at path %@", filePath],
                    error);
             return;
         }
@@ -135,14 +137,14 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 } break;
                 case TFLTensorDataTypeFloat16: {
                     for(NSUInteger i = 0; i < [data length]; i+=2) {
-                        Float16 val;
+                        Float32 val;
                         [data getBytes:&val range:NSMakeRange(i, 2)];
                         [outData addObject:@(val)];
                     }
                 } break;
                 case TFLTensorDataTypeInt32: {
                     for(NSUInteger i = 0; i < [data length]; i+=4) {
-                        Int32 val;
+                        SInt32 val;
                         [data getBytes:&val range:NSMakeRange(i, 4)];
                         [outData addObject:@(val)];
                     }

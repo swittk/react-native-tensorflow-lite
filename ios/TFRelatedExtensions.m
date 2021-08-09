@@ -55,7 +55,7 @@
 }
 
 +(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size {
-    CGImageRef normalizedImage = [self normalizeImage:image resizingTo:size];
+    CGImageRef normalizedImage = [self normalizeImage:image resizingToSize:size];
     if(!normalizedImage) {
         return nil;
     }
