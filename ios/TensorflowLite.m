@@ -242,8 +242,19 @@ RCT_REMAP_METHOD(runModelWithFiles,
         }
         [batchOutput addObject:outTensors];
     }
-    NSLog(@"finished");
-    resolve(batchOutput);
+    NSLog(@"finished %@", batchOutput);
+    
+    /*
+     Note here: The reason for choosing this data output format.
+     Originally tried to send over Array of Array<BatchOutput> (Outermost array = each file, inner one = each output tensor from each file)
+     But this crashes the app. Maybe react native doesn't support array of dicts in array.
+     
+     Solution : Send dict of arrays
+     */
+//    resolve(batchOutput);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        resolve(batchOutput[0]);
+    });
 }
 
 
