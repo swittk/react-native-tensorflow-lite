@@ -9,8 +9,11 @@
     "start": "react-native start"
   },
   "dependencies": {
+    "expo-asset": "^8.3.3",
+    "expo-image-picker": "^10.2.2",
     "react": "16.13.1",
-    "react-native": "0.63.4"
+    "react-native": "0.63.4",
+    "react-native-unimodules": "^0.14.6"
   },
   "devDependencies": {
     "@babel/core": "^7.12.10",

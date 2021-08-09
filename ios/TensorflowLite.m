@@ -118,10 +118,15 @@ RCT_REMAP_METHOD(runModelWithFiles,
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
         
-        NSMutableDictionary *outTensors = [NSMutableDictionary new];
+        NSMutableArray <NSDictionary *>*outTensors = [NSMutableArray new];
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
             TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
+            NSArray <NSNumber *>*shape = [outputi shapeWithError:&error];
+            if(error) {
+                reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get shape for tensor at index %lu", i], error);
+                return;
+            }
             NSData *data = [outputi dataWithError:&error];
             if(error) {
                 reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get output data for tensor at index %lu", i], error);
@@ -196,7 +201,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
                     return;
                 } break;
             }
-            outTensors[@(i)] = outData;
+            [outTensors addObject:@{
+                @"data": outData,
+                @"shape": shape
+            }];
         }
         [batchOutput addObject:outTensors];
     }

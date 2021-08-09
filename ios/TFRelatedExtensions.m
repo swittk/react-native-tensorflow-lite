@@ -51,6 +51,7 @@
     CGContextDrawImage(context, CGRectMake(0, 0, size.width, size.height), image);
     CGImageRef createdImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
+    CFAutorelease(createdImage);
     return createdImage;
 }
 
