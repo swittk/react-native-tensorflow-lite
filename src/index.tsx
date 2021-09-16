@@ -1,14 +1,48 @@
 import { NativeModules } from 'react-native';
 
+export type SKTFLiteModelInfoTensorInfoType = {
+  name: string,
+  dataType: number,
+  shape: number[]
+}
+export type SKTFLiteModelInfoType = {
+  input: SKTFLiteModelInfoTensorInfoType,
+  output: SKTFLiteModelInfoTensorInfoType
+}
+
 export type SKTFLiteRunModelWithFilesArg = {
   /** The path to the tensorflow lite model to use */
   model: string,
   /** The paths to the files to evaluate*/
   files: string[],
-  /** The shapes of the imput tesors. CAREFUL THIS WILL CRASH YOUR APP IF NOT PROPERLY DEFINED
+  /** The shapes of the input tesors. CAREFUL THIS WILL CRASH YOUR APP IF NOT PROPERLY DEFINED
    * If this is not provided, the shapes are used from the model anyway.
    */
-  shapes?: number[][]
+  shapes?: number[][],
+
+  /** 
+   * If the files are to be "group"ed together (like, we input multiple files at once to the model) 
+   * then it should be specified here.
+  */
+  groupMode?: {
+    /** Number of items to `group` together in the input */
+    numPerGroup: number,
+    /** Stride when enumerating the input files (defaults to 1) */
+    stride?: number,
+    /** 
+     * Whether to concatenate via another dimension, or to simply extend the data 
+     * Defaults to 'dims'.
+     * In `dims` mode, image inputs are automatically resized to match the model's input tensor
+     * the data is then appended end to end with each other (causing a new axis in the first dimension)
+     * (Currently only `dims` is implemented)
+    */
+    concatMode?: 'dims' | 'extend',
+    /** The axis to extend the data to in 'extend' mode (not implemented yet) */
+    extendAxis?: number
+  }
+
+  /** To be decided what to do with this, maybe `image`, etc */
+  fileMode?: 'image'
 }
 export type SKTFLiteTensorResult = SKTFLiteSingleTensorResult[];
 
@@ -27,6 +61,11 @@ type TensorflowLiteType = {
    * @returns Array corresponding to input files, each entry contains the output array of tensors from the model, the data field is simply a number array, while the shape is stored in the shape field.
    */
   runModelWithFiles(params: SKTFLiteRunModelWithFilesArg): Promise<SKTFLiteTensorResult[]>
+
+  getModelInfo(params: {
+    /** The path to the tensorflow lite model */
+    model: string
+  }): Promise<SKTFLiteModelInfoType>
 };
 
 const { TensorflowLite } = NativeModules;

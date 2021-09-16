@@ -273,10 +273,11 @@ PODS:
     - React-cxxreact (= 0.63.4)
     - React-jsi (= 0.63.4)
   - React-jsinspector (0.63.4)
-  - react-native-tensorflow-lite (0.5.1):
+  - react-native-tensorflow-lite (0.5.2):
     - React-Core
-    - TensorFlowLiteObjC (~> 2.4.0)
-    - TensorFlowLiteObjC/Metal (~> 2.4.0)
+    - TensorFlowLiteObjC (~> 2.6.0)
+    - TensorFlowLiteObjC/Metal (~> 2.6.0)
+    - TensorFlowLiteSelectTfOps (~> 2.6.0)
   - React-RCTActionSheet (0.63.4):
     - React-Core/RCTActionSheetHeaders (= 0.63.4)
   - React-RCTAnimation (0.63.4):
@@ -337,18 +338,19 @@ PODS:
     - React-Core (= 0.63.4)
     - React-cxxreact (= 0.63.4)
     - React-jsi (= 0.63.4)
-  - TensorFlowLiteC (2.4.0):
-    - TensorFlowLiteC/Core (= 2.4.0)
-  - TensorFlowLiteC/Core (2.4.0)
-  - TensorFlowLiteC/Metal (2.4.0):
+  - TensorFlowLiteC (2.6.0):
+    - TensorFlowLiteC/Core (= 2.6.0)
+  - TensorFlowLiteC/Core (2.6.0)
+  - TensorFlowLiteC/Metal (2.6.0):
     - TensorFlowLiteC/Core
-  - TensorFlowLiteObjC (2.4.0):
-    - TensorFlowLiteObjC/Core (= 2.4.0)
-  - TensorFlowLiteObjC/Core (2.4.0):
-    - TensorFlowLiteC (= 2.4.0)
-  - TensorFlowLiteObjC/Metal (2.4.0):
-    - TensorFlowLiteC/Metal (= 2.4.0)
-    - TensorFlowLiteObjC/Core (= 2.4.0)
+  - TensorFlowLiteObjC (2.6.0):
+    - TensorFlowLiteObjC/Core (= 2.6.0)
+  - TensorFlowLiteObjC/Core (2.6.0):
+    - TensorFlowLiteC (= 2.6.0)
+  - TensorFlowLiteObjC/Metal (2.6.0):
+    - TensorFlowLiteC/Metal (= 2.6.0)
+    - TensorFlowLiteObjC/Core (= 2.6.0)
+  - TensorFlowLiteSelectTfOps (2.6.0)
   - UMAppLoader (2.2.0)
   - UMCore (7.1.1)
   - UMReactNativeAdapter (6.3.5):
@@ -438,6 +440,7 @@ SPEC REPOS:
     - OpenSSL-Universal
     - TensorFlowLiteC
     - TensorFlowLiteObjC
+    - TensorFlowLiteSelectTfOps
     - YogaKit
 
 EXTERNAL SOURCES:
@@ -551,7 +554,7 @@ SPEC CHECKSUMS:
   React-jsi: a0418934cf48f25b485631deb27c64dc40fb4c31
   React-jsiexecutor: 93bd528844ad21dc07aab1c67cb10abae6df6949
   React-jsinspector: 58aef7155bc9a9683f5b60b35eccea8722a4f53a
-  react-native-tensorflow-lite: 91de36030015b596d3e160ae4b9b0e9840b39780
+  react-native-tensorflow-lite: a9624ddfde8032ced9e3bd4c11e6f14a139ea96b
   React-RCTActionSheet: 89a0ca9f4a06c1f93c26067af074ccdce0f40336
   React-RCTAnimation: 1bde3ecc0c104c55df246eda516e0deb03c4e49b
   React-RCTBlob: a97d378b527740cc667e03ebfa183a75231ab0f0
@@ -562,8 +565,9 @@ SPEC CHECKSUMS:
   React-RCTText: 5c51df3f08cb9dedc6e790161195d12bac06101c
   React-RCTVibration: ae4f914cfe8de7d4de95ae1ea6cc8f6315d73d9d
   ReactCommon: 73d79c7039f473b76db6ff7c6b159c478acbbb3b
-  TensorFlowLiteC: 09f8ac75a76caeadb19bcfa694e97454cc1ecf87
-  TensorFlowLiteObjC: 2cf94aac7c183ec3dac786fb96420c2ce6e7b820
+  TensorFlowLiteC: 869f93708210ed939fc40f40c772a120b7f964d1
+  TensorFlowLiteObjC: f321ffc8d56e1556d4ca0d1dad44763f1e649e78
+  TensorFlowLiteSelectTfOps: a15cd8395c35c8bb64967e120edbb7ee54066ffb
   UMAppLoader: 21af63390e55c82e037fb9752d93114a80ecf16e
   UMCore: 2f671796d7439604a1cf8ac7bbe5809cd5c50437
   UMReactNativeAdapter: f808906d586a16cebdc3844d86e1bdb8f114a873

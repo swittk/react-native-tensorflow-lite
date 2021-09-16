@@ -16,6 +16,8 @@ Pod::Spec.new do |s|
   s.source_files = "ios/**/*.{h,m,mm}"
 
   s.dependency "React-Core"
-  s.dependency 'TensorFlowLiteObjC', '~> 2.4.0'
-  s.dependency 'TensorFlowLiteObjC/Metal', '~> 2.4.0'
+  s.dependency 'TensorFlowLiteObjC', '~> 2.6.0'
+  s.dependency 'TensorFlowLiteObjC/Metal', '~> 2.6.0'
+  s.dependency 'TensorFlowLiteSelectTfOps', '~> 2.6.0'
+  s.user_target_xcconfig = { 'OTHER_LDFLAGS' => '-force_load $(SRCROOT)/Pods/TensorFlowLiteSelectTfOps/Frameworks/TensorFlowLiteSelectTfOps.framework/TensorFlowLiteSelectTfOps' }
 end

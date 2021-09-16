@@ -16,6 +16,19 @@ export default class App extends React.PureComponent<Props, State> {
     super(props);
     this.state = {};
   }
+  checkSampleModelParams = async () => {
+    const modelAsset = Asset.fromModule(require('./samplemodel.tflite'));
+    if (!modelAsset.downloaded) { await modelAsset.downloadAsync() };
+    try {
+      const results = await TensorflowLite.getModelInfo({
+        model: modelAsset.localUri!,
+      });
+      Alert.alert(`Got Model Info`, JSON.stringify(results));
+    } catch (e) {
+      Alert.alert(`Model info failed with error ${e.message || e.code} (${JSON.stringify(e)})`)
+    }
+
+  }
   runModel = async () => {
     const { imageUri } = this.state;
     if (!imageUri) {
@@ -88,6 +101,7 @@ export default class App extends React.PureComponent<Props, State> {
           <Button title="Pick image" onPress={this.pickImage} />
           <Button title="Run model" onPress={this.runModel} />
           <Button title="Run model 5 times" onPress={this.runModelFiveTimes} />
+          <Button title="try check params" onPress={this.checkSampleModelParams} />
           <Image source={{ uri: imageUri }} style={{ width: 320, height: 320 }} resizeMode='contain' />
           <Text>Result: {JSON.stringify(results)}</Text>
         </ScrollView>

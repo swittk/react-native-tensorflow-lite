@@ -25,6 +25,77 @@ RCT_REMAP_METHOD(multiply,
     resolve(result);
 }
 
+RCT_REMAP_METHOD(getModelInfo,
+                 getModelInfo:(nonnull NSDictionary *)argumentsDict
+                 withResolver:(RCTPromiseResolveBlock)resolve
+                 withRejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSError *error;
+    NSString *modelPath = argumentsDict[@"model"];
+    if(!modelPath) {
+        error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:1 userInfo:nil];
+        reject(@"NO_MODEL_PATH", @"No Model Path specified", error);
+        return;
+    }
+    if([modelPath hasPrefix:@"file://"]) {
+        modelPath = [modelPath substringFromIndex:7];
+    }
+    
+    TFLInterpreter *interpreter = [[TFLInterpreter alloc] initWithModelPath:modelPath
+                                                                      error:&error];
+    if (error != nil) { /* Error handling... */
+        reject(@"TF_LOAD_ERROR", @"TF Lite model load failed", error);
+        return;
+    }
+    [interpreter allocateTensorsWithError:&error];
+    if (error != nil) { /* Error handling... */
+        reject(@"TF_INIT_ALLOC_ERROR", @"TF Lite init allocation failed", error);
+        return;
+    }
+    NSUInteger tensorCount = [interpreter inputTensorCount];
+    NSUInteger outTensorCount = [interpreter outputTensorCount];
+    if(tensorCount == 0 || outTensorCount == 0) {
+        error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:30 userInfo:nil];
+        reject(@"TF_TENSOR_ALLOC_ERROR", @"TF Lite interpreter creation failed", error);
+        return;
+    }
+    /**
+     * Input shapes dictionary array
+     * Each element has { name, dataType, shape }
+     */
+    NSMutableArray <NSDictionary *>*inputShapes = [NSMutableArray new];
+    for(NSUInteger i = 0; i < tensorCount; i++) {
+        TFLTensor *tensor = [interpreter inputTensorAtIndex:i error:&error];
+        NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
+        if(error) {
+            reject(
+                   @"TF_SHAPE_ERROR",
+                   [NSString stringWithFormat:@"TF Lite failed to get shape for input tensor at index %lu", i],
+                   error);
+            return;
+        }
+        [inputShapes addObject:@{ @"name": tensor.name ?:@"NO_NAME", @"dataType": @(tensor.dataType), @"shape": tensorshape }];
+    }
+    
+    NSMutableArray <NSDictionary *>*outputShapes = [NSMutableArray new];
+    for(NSUInteger i = 0; i < outTensorCount; i++) {
+        TFLTensor *tensor = [interpreter outputTensorAtIndex:i error:&error];
+        NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
+        if(error) {
+            reject(
+                   @"TF_SHAPE_ERROR",
+                   [NSString stringWithFormat:@"TF Lite failed to get shape for output tensor at index %lu", i],
+                   error);
+            return;
+        }
+        [outputShapes addObject:@{ @"name": tensor.name ?:@"NO_NAME", @"dataType": @(tensor.dataType), @"shape": tensorshape }];
+    }
+    resolve(@{
+        @"input": inputShapes,
+        @"output": outputShapes
+            });
+}
+
 RCT_REMAP_METHOD(runModelWithFiles,
                  runModelWithFiles:(nonnull NSDictionary *)argumentsDict
                  withResolver:(RCTPromiseResolveBlock)resolve
@@ -36,7 +107,14 @@ RCT_REMAP_METHOD(runModelWithFiles,
     NSString *fileMode = argumentsDict[@"fileMode"];
     // User-provided shapes for tensors (Optional, can be inferred from the model)
     NSArray <NSArray <NSNumber *>*>*shapes = argumentsDict[@"shapes"];
-    if(fileMode) {
+    // User-provided groupMode configuration options.
+    // If specified, the files are inputted to the model in `group`s
+    NSDictionary *groupMode = argumentsDict[@"groupMode"];
+    
+    if(![fileMode isEqualToString:@"image"]) {
+        error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:45 userInfo:nil];
+        reject(@"UNSUPPORTED_MODE", @"Only image mode is currently supported", error);
+        return;
         // TODO: ENABLE FILE MODE FOR BOTH IMAGE AND REGULAR FILE
     }
     if(!modelPath) {
