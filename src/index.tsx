@@ -48,7 +48,9 @@ export type SKTFLiteRunModelWithFilesArg = {
   */
   imageScaleMode?: 'fill' | 'fit',
   /** if specified; [x, y, width, height] parts of the input images to crop to when processing. */
-  imageCrops?: [number, number, number, number][]
+  imageCrops?: [number, number, number, number][],
+  /** The mode of the crops. If 'relative' then the inputs are from 0-1, 'absolute' then the inputs are absolute coordinates. Defaults to 'absolute' */
+  imageCropsMode?: 'absolute' | 'relative'
 }
 export type SKTFLiteTensorResult = SKTFLiteSingleTensorResult[];
 

@@ -39,6 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 +(CGImageRef)normalizeImage:(CGImageRef)image resizingToSize:(CGSize)size;
 
 -(UIImage *)cropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height;
+-(UIImage *)relativeCropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height;
 @end
 
 NS_ASSUME_NONNULL_END

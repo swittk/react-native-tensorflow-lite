@@ -112,7 +112,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
     NSDictionary *groupMode = argumentsDict[@"groupMode"];
     BOOL imageModeIsFit = [argumentsDict[@"imageScaleMode"] isEqualToString:@"fit"];
     NSArray <NSArray <NSNumber *>*>*imageCrops = argumentsDict[@"imageCrops"];
-    
+    BOOL cropsAreRelative = [argumentsDict[@"imageCropsMode"] isEqualToString:@"relative"];
     int stride = 1;
     int numPerGroup = 1;
     if(groupMode) {
@@ -223,7 +223,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
                     for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
                         NSInteger inputFileIndex = inputIndex + groupIndex;
                         NSString *filePath = filePaths[inputFileIndex];
-                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex]];
+                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex] cropsAreRelative: cropsAreRelative];
                         [groupData appendData:data];
                     }
                 }
@@ -239,7 +239,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
             }
             else {
                 NSString *filePath = filePaths[inputIndex];
-                data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil];
+                data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil cropsAreRelative: cropsAreRelative];
             }
             [tensor copyData:data error:&error];
             if(error != nil) {
@@ -380,7 +380,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
     return data;
 }
 
--(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit cropTo:(NSArray <NSNumber *>*)crop {
+-(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit cropTo:(NSArray <NSNumber *>*)crop cropsAreRelative:(BOOL)cropsAreRelative {
     NSString *actualFilePath;
     if([filePath hasPrefix:@"file://"]) {
         actualFilePath = [filePath substringFromIndex:7];
@@ -398,7 +398,17 @@ RCT_REMAP_METHOD(runModelWithFiles,
             NSLog(@"Crop count < 4");
             return nil;
         }
-        image = [image cropToX:crop[0].intValue y:crop[1].intValue width:crop[2].intValue height:crop[3].intValue];
+        if(!cropsAreRelative) {
+            image = [image cropToX:crop[0].intValue y:crop[1].intValue width:crop[2].intValue height:crop[3].intValue];
+        }
+        else {
+            image = [image
+                     relativeCropToX:crop[0].doubleValue
+                     y:crop[1].doubleValue
+                     width:crop[2].doubleValue
+                     height:crop[3].doubleValue
+                     ];
+        }
     }
     NSData *data;
     if(imageModeIsFit) {

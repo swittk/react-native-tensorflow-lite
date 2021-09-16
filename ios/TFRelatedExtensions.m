@@ -320,6 +320,22 @@ void SafeLog(NSString *str) {
     CGImageRelease(imageRef);
     return result;
 }
+-(UIImage *)relativeCropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height {
+    CGSize mySize = self.size;
+    CGFloat myWidth = mySize.width;
+    CGFloat myHeight = mySize.height;
+    CGRect rect = CGRectMake(x*myWidth*self.scale,
+                      y*myHeight*self.scale,
+                      width*myWidth*self.scale,
+                      height*myHeight*self.scale);
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
+    UIImage *result = [UIImage imageWithCGImage:imageRef
+                                          scale:self.scale
+                                    orientation:self.imageOrientation];
+    CGImageRelease(imageRef);
+    return result;
+}
+
 
 @end
 
