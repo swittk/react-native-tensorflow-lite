@@ -15,8 +15,8 @@ export type SKTFLiteRunModelWithFilesArg = {
   model: string,
   /** The paths to the files to evaluate*/
   files: string[],
-  /** The shapes of the input tesors. CAREFUL THIS WILL CRASH YOUR APP IF NOT PROPERLY DEFINED
-   * If this is not provided, the shapes are used from the model anyway.
+  /** The shapes of the input tensors. CAREFUL THIS WILL CRASH YOUR APP IF NOT PROPERLY DEFINED
+   * If this is not provided, the shapes are rudimentarily inferred from the model.
    */
   shapes?: number[][],
 
@@ -26,7 +26,7 @@ export type SKTFLiteRunModelWithFilesArg = {
   */
   groupMode?: {
     /** Number of items to `group` together in the input */
-    numPerGroup: number,
+    numPerGroup?: number,
     /** Stride when enumerating the input files (defaults to 1) */
     stride?: number,
     /** 
@@ -42,7 +42,13 @@ export type SKTFLiteRunModelWithFilesArg = {
   }
 
   /** To be decided what to do with this, maybe `image`, etc */
-  fileMode?: 'image'
+  fileMode?: 'image',
+  /** If image scaling should be by `fill` or `fit` (defaults to fill) 
+   * Fit = pad with black bars to fit the image too
+  */
+  imageScaleMode?: 'fill' | 'fit',
+  /** if specified; [x, y, width, height] parts of the input images to crop to when processing. */
+  imageCrops?: [number, number, number, number][]
 }
 export type SKTFLiteTensorResult = SKTFLiteSingleTensorResult[];
 

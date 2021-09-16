@@ -28,6 +28,17 @@ NS_ASSUME_NONNULL_BEGIN
 /////       point values).
 ///// - Returns: The scaled image as data or `nil` if the image could not be scaled.
 -(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized;
+/**
+    The image, resized to fit the size specified, with black bars padding
+ */
+-(UIImage *)imageFittedToSize:(CGSize)sizeTarget;
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale;
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(UIColor *)bgColor;
+
++(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size;
++(CGImageRef)normalizeImage:(CGImageRef)image resizingToSize:(CGSize)size;
+
+-(UIImage *)cropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height;
 @end
 
 NS_ASSUME_NONNULL_END

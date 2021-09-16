@@ -110,8 +110,27 @@ RCT_REMAP_METHOD(runModelWithFiles,
     // User-provided groupMode configuration options.
     // If specified, the files are inputted to the model in `group`s
     NSDictionary *groupMode = argumentsDict[@"groupMode"];
+    BOOL imageModeIsFit = [argumentsDict[@"imageScaleMode"] isEqualToString:@"fit"];
+    NSArray <NSArray <NSNumber *>*>*imageCrops = argumentsDict[@"imageCrops"];
     
-    if(![fileMode isEqualToString:@"image"]) {
+    int stride = 1;
+    int numPerGroup = 1;
+    if(groupMode) {
+        stride = [groupMode[@"stride"] intValue] ?: 1;
+        numPerGroup = [groupMode[@"numPerGroup"] intValue] ?: 1;
+        if(stride <= 0) {
+            error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:94 userInfo:nil];
+            reject(@"INVALID_PARAMETER", @"stride must be more than zero", error);
+            return;
+        }
+        if(numPerGroup <= 0) {
+            error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:94 userInfo:nil];
+            reject(@"INVALID_PARAMETER", @"numPerGroup must be more than zero", error);
+            return;
+        }
+    }
+    
+    if((fileMode != nil) && ![fileMode isEqualToString:@"image"]) {
         error = [[NSError alloc] initWithDomain:@"SKRNTFLITE" code:45 userInfo:nil];
         reject(@"UNSUPPORTED_MODE", @"Only image mode is currently supported", error);
         return;
@@ -161,8 +180,10 @@ RCT_REMAP_METHOD(runModelWithFiles,
      ( length = number of tensors, data = Record<number, number[]>, shape = number[] )
      */
     NSMutableArray *batchOutput = [NSMutableArray new];
-    for(NSUInteger inputIndex = 0; inputIndex < filePaths.count; inputIndex++) {
-        NSString *filePath = filePaths[inputIndex];
+    
+    // The cap file index to not reach when enumerating the files (limited by group inputs)
+    NSInteger capFileIndex = filePaths.count - (numPerGroup - 1);
+    for(NSInteger inputIndex = 0; inputIndex < capFileIndex; inputIndex += stride) {
         for(NSUInteger i = 0; i < tensorCount; i++) {
             TFLTensor *tensor = [interpreter inputTensorAtIndex:0 error:&error];
             if(error != nil) {
@@ -171,24 +192,6 @@ RCT_REMAP_METHOD(runModelWithFiles,
                        [NSString stringWithFormat:@"TF Lite failed to get tensor at index %lu", i],
                        error);
                 return;
-            }
-            NSString *actualFilePath;
-            if([filePath hasPrefix:@"file://"]) {
-                actualFilePath = [filePath substringFromIndex:7];
-            }
-            else {
-                actualFilePath = filePath;
-            }
-            UIImage *image = [UIImage imageWithContentsOfFile:actualFilePath];
-            if(!image) {
-                NSLog(@"No image found at given path");
-                if(error) {
-                    reject(
-                           @"TF_IMAGE_NOT_FOUND",
-                           [NSString stringWithFormat:@"Image not found at path %@", filePath],
-                           error);
-                    return;
-                }
             }
             CGSize shape;
             if(shapes) {
@@ -203,10 +206,6 @@ RCT_REMAP_METHOD(runModelWithFiles,
                            error);
                     return;
                 }
-                //                NSLog(@"tensor input shape is %@", tensorshape);
-                // This logs out (1, 192, 192, 3)
-                //                shape.width = tensorshape[0].intValue;
-                //                shape.height = tensorshape[1].intValue;
                 // TODO: MAKE THIS SMARTER NOT THIS DUMB
                 if(tensorshape.count > 3) {
                     shape.width = tensorshape[1].intValue;
@@ -217,9 +216,31 @@ RCT_REMAP_METHOD(runModelWithFiles,
                     shape.height = tensorshape[1].intValue;
                 }
             }
-            NSData *data = [image scaledDataWithSize:shape isQuantized:NO];
-//            NSLog(@"Tensor %lu, datatype is %d", i, [tensor dataType]);
-//            NSLog(@"Data object is len %d, %@", data.length, data);
+            NSData *data;
+            if(numPerGroup > 1) {
+                NSMutableData *groupData = [NSMutableData new];
+                if(imageCrops) {
+                    for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
+                        NSInteger inputFileIndex = inputIndex + groupIndex;
+                        NSString *filePath = filePaths[inputFileIndex];
+                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex]];
+                        [groupData appendData:data];
+                    }
+                }
+                else {
+                    for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
+                        NSInteger inputFileIndex = inputIndex + groupIndex;
+                        NSString *filePath = filePaths[inputFileIndex];
+                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit];
+                        [groupData appendData:data];
+                    }
+                }
+                data = groupData;
+            }
+            else {
+                NSString *filePath = filePaths[inputIndex];
+                data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil];
+            }
             [tensor copyData:data error:&error];
             if(error != nil) {
                 reject(
@@ -233,7 +254,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
         if(!ok || (error != nil)) {
             reject(
                    @"TF_INVOKE_ERROR",
-                   [NSString stringWithFormat:@"TF Lite invocation failed for file at path %@", filePath],
+                   [NSString stringWithFormat:@"TF Lite invocation failed for file at path %@", filePaths[inputIndex]],
                    error);
             return;
         }
@@ -334,6 +355,59 @@ RCT_REMAP_METHOD(runModelWithFiles,
         [batchOutput addObject:outTensors];
     }
     resolve(batchOutput);
+}
+
+-(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit {
+    NSString *actualFilePath;
+    if([filePath hasPrefix:@"file://"]) {
+        actualFilePath = [filePath substringFromIndex:7];
+    }
+    else {
+        actualFilePath = filePath;
+    }
+    UIImage *image = [UIImage imageWithContentsOfFile:actualFilePath];
+    if(!image) {
+        NSLog(@"No image found at given path");
+        return nil;
+    }
+    NSData *data;
+    if(imageModeIsFit) {
+        data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO];
+    }
+    else {
+        data = [image scaledDataWithSize:shape isQuantized:NO];
+    }
+    return data;
+}
+
+-(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit cropTo:(NSArray <NSNumber *>*)crop {
+    NSString *actualFilePath;
+    if([filePath hasPrefix:@"file://"]) {
+        actualFilePath = [filePath substringFromIndex:7];
+    }
+    else {
+        actualFilePath = filePath;
+    }
+    UIImage *image = [UIImage imageWithContentsOfFile:actualFilePath];
+    if(!image) {
+        NSLog(@"No image found at given path");
+        return nil;
+    }
+    if(crop) {
+        if([crop count] < 4) {
+            NSLog(@"Crop count < 4");
+            return nil;
+        }
+        image = [image cropToX:crop[0].intValue y:crop[1].intValue width:crop[2].intValue height:crop[3].intValue];
+    }
+    NSData *data;
+    if(imageModeIsFit) {
+        data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO];
+    }
+    else {
+        data = [image scaledDataWithSize:shape isQuantized:NO];
+    }
+    return data;
 }
 
 

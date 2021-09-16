@@ -7,6 +7,26 @@
 
 #import "TFRelatedExtensions.h"
 
+CGSize CGSizeFittingSize(
+                         CGSize sizeImage,
+                 CGSize sizeTarget
+                         )
+{
+    CGSize ret;
+    float fw;
+    float fh;
+    float f;
+    
+    fw = (float) (sizeTarget.width / sizeImage.width);
+    fh = (float) (sizeTarget.height / sizeImage.height);
+    f = MIN(fw, fh);
+    ret = (CGSize){
+        .width =  sizeImage.width * f,
+        .height = sizeImage.height * f
+    };
+    return ret;
+}
+
 void SafeLog(NSString *str) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSLog(@"%@", str);
@@ -22,7 +42,7 @@ void SafeLog(NSString *str) {
     return image;
 }
 -(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized {
-//    SafeLog(@"I Should be logged, always");
+    //    SafeLog(@"I Should be logged, always");
     if(!self.CGImage) {
         SafeLog(@"I don't have CGIMAGE");
         return nil;
@@ -46,8 +66,8 @@ void SafeLog(NSString *str) {
         BOOL colorspaceNameIsSRGB = CFStringCompare(imageColorspace, kCGColorSpaceSRGB, 0) == kCFCompareEqualTo;
         CFRelease(imageColorspace);
         CFRelease(deviceColorSpaceName);
-        CFRelease(colorSpace);
         if(colorspaceSameAsDevice || colorspaceNameIsSRGB) {
+            CFRelease(colorSpace);
             // Return the image if it is in the right format
             // to save a redraw operation.
             CFAutorelease(image);
@@ -55,7 +75,7 @@ void SafeLog(NSString *str) {
         }
     }
     else {
-        CFRelease(colorSpace);
+        // nothing
     }
     
     CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
@@ -63,6 +83,7 @@ void SafeLog(NSString *str) {
     unsigned long scaledBytesPerRow = (CGImageGetBytesPerRow(image) / CGImageGetWidth(image)) * width;
     // Create a bitmap context
     CGContextRef context = CGBitmapContextCreate(NULL, width, (int)size.height, CGImageGetBitsPerComponent(image), scaledBytesPerRow, colorSpace, bitmapInfo);
+    CFRelease(colorSpace);
     if(!context) {
         SafeLog(@"Failed to create CGContextRef");
         CGImageRelease(image);
@@ -85,7 +106,7 @@ void SafeLog(NSString *str) {
     CGImageRetain(normalizedImage);
     CGDataProviderRef dataProvider = CGImageGetDataProvider(normalizedImage);
     CFDataRef data = CGDataProviderCopyData(dataProvider);
-//    CGDataProviderRelease(dataProvider); // Likely cause of error : "Get"DataProvider = we shouldn't free it.
+    //    CGDataProviderRelease(dataProvider); // Likely cause of error : "Get"DataProvider = we shouldn't free it.
     CGImageRelease(normalizedImage);
     if(!data) { SafeLog(@"Failed to get data from image"); return nil; };
     // After here we shall not return before the end of the function
@@ -179,7 +200,7 @@ void SafeLog(NSString *str) {
             // We discard the image's alpha channel before running the TF Lite model, so we can treat
             // alpha and non-alpha images identically.
             outData = [NSData dataWithBytesNoCopy:outBytes length:totalAlloc];
-//            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
+            //            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
         } break;
         case 32: {
             if(bitsPerComponent != 8){ SafeLog(@"BitsPerComponent not 8"); break;}
@@ -239,7 +260,7 @@ void SafeLog(NSString *str) {
                 outBytesIndex += 3;
             }
             outData = [NSData dataWithBytesNoCopy:outBytes length:allocLen];
-//            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
+            //            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
         } break;
         default:{
             SafeLog(@"Unsupported format from image");
@@ -249,6 +270,56 @@ void SafeLog(NSString *str) {
     return outData;
 }
 
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget {
+    return [self imageFittedToSize:sizeTarget opaque:YES scale:1.0 backgroundColor:[UIColor blackColor]];
+}
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale {
+    return [self imageFittedToSize:sizeTarget opaque:opaque scale:scale backgroundColor:nil];
+}
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(UIColor *)bgColor
+{
+    CGSize sizeNewImage;
+    CGSize size = self.size;
+    UIImage *ret;
+    sizeNewImage = CGSizeFittingSize(size, sizeTarget);
+    UIGraphicsBeginImageContextWithOptions(sizeNewImage, opaque, 1.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    if(bgColor) {
+        CGContextSetFillColorWithColor(context, bgColor.CGColor);
+        CGContextFillRect(context, (CGRect){.origin = CGPointZero, .size = sizeNewImage });
+    }
+    CGContextScaleCTM(context, 1, -1);
+    CGContextTranslateCTM(context, 0, -sizeNewImage.height);
+    CGContextDrawImage(context, CGRectMake(0, 0, sizeNewImage.width, sizeNewImage.height), self.CGImage);
+    ret = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return ret;
+}
+-(UIImage *)cropToRect:(CGRect)rect {
+    rect = CGRectMake(rect.origin.x*self.scale,
+                      rect.origin.y*self.scale,
+                      rect.size.width*self.scale,
+                      rect.size.height*self.scale);
+    
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
+    UIImage *result = [UIImage imageWithCGImage:imageRef
+                                          scale:self.scale
+                                    orientation:self.imageOrientation];
+    CGImageRelease(imageRef);
+    return result;
+}
+-(UIImage *)cropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height {
+    CGRect rect = CGRectMake(x*self.scale,
+                      y*self.scale,
+                      width*self.scale,
+                      height*self.scale);
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
+    UIImage *result = [UIImage imageWithCGImage:imageRef
+                                          scale:self.scale
+                                    orientation:self.imageOrientation];
+    CGImageRelease(imageRef);
+    return result;
+}
 
 @end
 
