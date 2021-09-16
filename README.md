@@ -9,6 +9,16 @@ Tensorflow Lite for React Native
 npm install @switt/react-native-tensorflow-lite
 ```
 
+## Current features
+- Documented in Typescript. Seriously, just read the types from there.
+- Allow selection of model simply by local file URL (no need to add to compile-time). Was designed to be used with Expo's Asset system (resolve model file URI from Asset.fromModule(...)) 
+- Input type : Image(s)
+  - Input 1 or multiple images to be run on a Tensorflow Lite model.
+  - Allow selecting resize mode of the images (fit vs fill)
+  - Allow specifying crop areas (especially useful when using a previous model to crop out a region of interest)
+- iOS :: TensorflowLite with TF Ops enabled (version 2.6.0 - 0.0.1 nightly fails linking due to duplicated symbols. Will update if stable.)
+  - simply `pod install` and the linker flags are added automatically.
+
 ## Usage
 
 ```ts
