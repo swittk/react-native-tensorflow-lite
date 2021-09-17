@@ -29,8 +29,8 @@ export const TestImageScaler = React.memo((props: {
     <Button title='TRANSFORM!' onPress={async () => {
       const result = await TensorflowLite.tensorImageTest({
         file: imageUri,
-        // size: { width: 100, height: 100 },
-        relativeCrops: [0, 0.0, 0.5, 0.5],
+        size: { width: 100, height: 100 },
+        relativeCrops: [0, 0.0, 1, 1],
         backgroundColor: '#000000'
       });
       setTransformedImage(base64RawToDataURI(result));

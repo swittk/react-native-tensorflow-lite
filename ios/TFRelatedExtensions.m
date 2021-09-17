@@ -340,13 +340,14 @@ void SafeLog(NSString *str) {
         CGContextFillRect(context, (CGRect){.origin = CGPointZero, .size = sizeTarget });
     }
     // These two lines convert coordinate system to top left
-    CGContextScaleCTM(context, 1, -1);
-    CGContextTranslateCTM(context, 0, -sizeNewImage.height);
-    
+//    CGContextScaleCTM(context, 1, -1);
+//    CGContextTranslateCTM(context, 0, -sizeNewImage.height);
     CGFloat originX = (sizeTarget.width - sizeNewImage.width)/2.0;
     CGFloat originY = (sizeTarget.height - sizeNewImage.height)/2.0;
     CGRect drawToRect = CGRectMake(originX, originY, sizeNewImage.width, sizeNewImage.height);
-    CGContextDrawImage(context, drawToRect, [self CGImageWithCorrectOrientation]);
+//    NSLog(@"drawToRect %@", NSStringFromCGRect(drawToRect));
+    [self drawImage:[self orientationUpImage] inRect:drawToRect context:context];
+//    CGContextDrawImage(context, drawToRect, [self orientationUpImage].CGImage);
     ret = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return ret;
@@ -357,7 +358,7 @@ void SafeLog(NSString *str) {
                       rect.size.width*self.scale,
                       rect.size.height*self.scale);
     
-    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImageWithCorrectOrientation], rect);
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self orientationUpImage].CGImage, rect);
     UIImage *result = [UIImage imageWithCGImage:imageRef
                                           scale:self.scale
                                     orientation:UIImageOrientationUp];
@@ -369,7 +370,7 @@ void SafeLog(NSString *str) {
                              y*self.scale,
                              width*self.scale,
                              height*self.scale);
-    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImageWithCorrectOrientation], rect);
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self orientationUpImage].CGImage, rect);
     UIImage *result = [UIImage imageWithCGImage:imageRef
                                           scale:self.scale
                                     orientation:UIImageOrientationUp];
@@ -427,7 +428,21 @@ void SafeLog(NSString *str) {
     
     return result;
 }
-
+-(UIImage *)orientationUpImage {
+    if(self.imageOrientation == UIImageOrientationUp) {
+        return self;
+    }
+    CGSize size = self.size;
+    if(self.scale != 1) {
+        size.width *= self.scale;
+        size.height *= self.scale;
+    }
+    UIGraphicsBeginImageContext(size);
+    [self drawInRect:CGRectMake(0,0,size.width,size.height)];
+    UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return newImage;
+}
 + (UIImage*)imageFromImage:(UIImage*)image scaledToSize:(CGSize)newSize
 {
     UIGraphicsBeginImageContext( newSize );
