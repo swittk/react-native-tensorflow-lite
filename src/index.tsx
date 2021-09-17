@@ -50,7 +50,10 @@ export type SKTFLiteRunModelWithFilesArg = {
   /** if specified; [x, y, width, height] parts of the input images to crop to when processing. */
   imageCrops?: [number, number, number, number][],
   /** The mode of the crops. If 'relative' then the inputs are from 0-1, 'absolute' then the inputs are absolute coordinates. Defaults to 'absolute' */
-  imageCropsMode?: 'absolute' | 'relative'
+  imageCropsMode?: 'absolute' | 'relative',
+
+  /** If inference on CPU is preferred (defaults to GPU/Metal, coreML might be supported soon) */
+  forceCPU?: boolean,
 }
 export type SKTFLiteTensorResult = SKTFLiteSingleTensorResult[];
 
@@ -59,6 +62,16 @@ export type SKTFLiteSingleTensorResult = {
   shape: number[],
   /** The data of this tensor */
   data: number[]
+}
+
+export type SKTFLiteTensorImageTestArgs = {
+  /** Path to the file */
+  file: string,
+  size?: {width: number, height: number},
+  relativeCrops?: [number, number, number, number],
+  opaque?: boolean,
+  scale?: number,
+  backgroundColor?: string,
 }
 
 type TensorflowLiteType = {
@@ -74,6 +87,8 @@ type TensorflowLiteType = {
     /** The path to the tensorflow lite model */
     model: string
   }): Promise<SKTFLiteModelInfoType>
+
+  tensorImageTest(params: SKTFLiteTensorImageTestArgs): Promise<string>;
 };
 
 const { TensorflowLite } = NativeModules;

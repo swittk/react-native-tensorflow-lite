@@ -1,6 +1,6 @@
 {
   "name": "@switt/react-native-tensorflow-lite",
-  "version": "0.5.3",
+  "version": "0.5.5",
   "description": "Tensorflow Lite for React Native",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",

@@ -9,7 +9,7 @@
 
 CGSize CGSizeFittingSize(
                          CGSize sizeImage,
-                 CGSize sizeTarget
+                         CGSize sizeTarget
                          )
 {
     CGSize ret;
@@ -80,12 +80,39 @@ void SafeLog(NSString *str) {
     
     CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
     int width = size.width;
-    unsigned long scaledBytesPerRow = (CGImageGetBytesPerRow(image) / CGImageGetWidth(image)) * width;
+    unsigned long scaledBytesPerRow = (CGImageGetBytesPerRow(image) / cgImageSize.width) * width;
     // Create a bitmap context
+    // There is currently an error occuring when using images from screenshots, CGBitmapContextCreate errors when using screenshots
+    // When CGBITMAP_CONTEXT_LOG_ERRORS environment variable is set to 1, the following shows.
+    /*
+     CGBitmapContextCreate: unsupported parameter combination:
+     16 bits/component; integer;
+     64 bits/pixel;
+     RGB color space model; kCGImageAlphaPremultipliedLast;
+     kCGImageByteOrder32Big byte order;
+     1536 bytes/row.
+     Valid parameters for RGB color space model are:
+     16  bits per pixel,         5  bits per component,         kCGImageAlphaNoneSkipFirst
+     32  bits per pixel,         8  bits per component,         kCGImageAlphaNoneSkipFirst
+     32  bits per pixel,         8  bits per component,         kCGImageAlphaNoneSkipLast
+     32  bits per pixel,         8  bits per component,         kCGImageAlphaPremultipliedFirst
+     32  bits per pixel,         8  bits per component,         kCGImageAlphaPremultipliedLast
+     32  bits per pixel,         10 bits per component,         kCGImageAlphaNone|kCGImagePixelFormatRGBCIF10
+     64  bits per pixel,         16 bits per component,         kCGImageAlphaPremultipliedLast
+     64  bits per pixel,         16 bits per component,         kCGImageAlphaNoneSkipLast
+     64  bits per pixel,         16 bits per component,         kCGImageAlphaPremultipliedLast|kCGBitmapFloatComponents|kCGImageByteOrder16Little
+     64  bits per pixel,         16 bits per component,         kCGImageAlphaNoneSkipLast|kCGBitmapFloatComponents|kCGImageByteOrder16Little
+     128 bits per pixel,         32 bits per component,         kCGImageAlphaPremultipliedLast|kCGBitmapFloatComponents
+     128 bits per pixel,         32 bits per component,         kCGImageAlphaNoneSkipLast|kCGBitmapFloatComponents
+     
+     valid byte order flags are kCGBitmapByteOrderDefault, kCGBitmapByteOrder16Big, kCGBitmapByteOrder16Little See Quartz 2D Programming Guide (available online) for more information.
+     
+     */
     CGContextRef context = CGBitmapContextCreate(NULL, width, (int)size.height, CGImageGetBitsPerComponent(image), scaledBytesPerRow, colorSpace, bitmapInfo);
     CFRelease(colorSpace);
     if(!context) {
         SafeLog(@"Failed to create CGContextRef");
+        NSLog(@"Image BytesPerRow %d Size %@", scaledBytesPerRow, NSStringFromCGSize(cgImageSize));
         CGImageRelease(image);
         return nil;
     }
@@ -270,27 +297,30 @@ void SafeLog(NSString *str) {
     return outData;
 }
 
--(UIImage *)imageFittedToSize:(CGSize) sizeTarget {
+-(UIImage *)imageFittedToSize:(CGSize)sizeTarget {
     return [self imageFittedToSize:sizeTarget opaque:YES scale:1.0 backgroundColor:[UIColor blackColor]];
 }
--(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale {
+-(UIImage *)imageFittedToSize:(CGSize)sizeTarget opaque:(BOOL)opaque scale:(float)scale {
     return [self imageFittedToSize:sizeTarget opaque:opaque scale:scale backgroundColor:nil];
 }
--(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(UIColor *)bgColor
+-(UIImage *)imageFittedToSize:(CGSize)sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(nullable UIColor *)bgColor
 {
     CGSize sizeNewImage;
     CGSize size = self.size;
     UIImage *ret;
     sizeNewImage = CGSizeFittingSize(size, sizeTarget);
-    UIGraphicsBeginImageContextWithOptions(sizeNewImage, opaque, 1.0f);
+    UIGraphicsBeginImageContextWithOptions(sizeTarget, opaque, 1.0f);
     CGContextRef context = UIGraphicsGetCurrentContext();
     if(bgColor) {
         CGContextSetFillColorWithColor(context, bgColor.CGColor);
-        CGContextFillRect(context, (CGRect){.origin = CGPointZero, .size = sizeNewImage });
+        CGContextFillRect(context, (CGRect){.origin = CGPointZero, .size = sizeTarget });
     }
+    // These two lines convert coordinate system to top left
     CGContextScaleCTM(context, 1, -1);
     CGContextTranslateCTM(context, 0, -sizeNewImage.height);
-    CGContextDrawImage(context, CGRectMake(0, 0, sizeNewImage.width, sizeNewImage.height), self.CGImage);
+    CGFloat originX = (sizeTarget.width - sizeNewImage.width)/2.0;
+    CGFloat originY = (sizeTarget.height - sizeNewImage.height)/2.0;
+    CGContextDrawImage(context, CGRectMake(originX, originY, sizeNewImage.width, sizeNewImage.height), [self CGImageWithCorrectOrientation]);
     ret = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return ret;
@@ -301,41 +331,155 @@ void SafeLog(NSString *str) {
                       rect.size.width*self.scale,
                       rect.size.height*self.scale);
     
-    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImageWithCorrectOrientation], rect);
     UIImage *result = [UIImage imageWithCGImage:imageRef
                                           scale:self.scale
-                                    orientation:self.imageOrientation];
+                                    orientation:UIImageOrientationUp];
     CGImageRelease(imageRef);
     return result;
 }
 -(UIImage *)cropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height {
     CGRect rect = CGRectMake(x*self.scale,
-                      y*self.scale,
-                      width*self.scale,
-                      height*self.scale);
-    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
+                             y*self.scale,
+                             width*self.scale,
+                             height*self.scale);
+    NSLog(@"cropping to rect %@", NSStringFromCGRect(rect));
+    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImageWithCorrectOrientation], rect);
     UIImage *result = [UIImage imageWithCGImage:imageRef
                                           scale:self.scale
-                                    orientation:self.imageOrientation];
+                                    orientation:UIImageOrientationUp];
     CGImageRelease(imageRef);
+    NSLog(@"resulting image dims %@", NSStringFromCGSize(result.size));
     return result;
 }
 -(UIImage *)relativeCropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height {
-    CGSize mySize = self.size;
-    CGFloat myWidth = mySize.width;
-    CGFloat myHeight = mySize.height;
-    CGRect rect = CGRectMake(x*myWidth*self.scale,
-                      y*myHeight*self.scale,
-                      width*myWidth*self.scale,
-                      height*myHeight*self.scale);
-    CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImage], rect);
-    UIImage *result = [UIImage imageWithCGImage:imageRef
-                                          scale:self.scale
-                                    orientation:self.imageOrientation];
+    // UIImage's `size` property is already for its current Orientation.
+    CGSize size = self.size;
+    return [self cropToX:x*size.width y:y*size.height width:width*size.width height:height*size.height];
+}
+
+// Adapted from https://stackoverflow.com/questions/506622/cgcontextdrawimage-draws-image-upside-down-when-passed-uiimage-cgimage/35483967#35483967
+-(void)drawImage:(UIImage *)image inRect:(CGRect)rect context:(CGContextRef)context {
+    //flip coords
+    CGFloat ty = (rect.origin.y + rect.size.height);
+    CGContextTranslateCTM(context, 0, ty);
+    CGContextScaleCTM(context, 1.0, -1.0);
+    
+    //draw image
+    CGRect rect__y_zero = CGRectMake(rect.origin.x, 0, rect.size.width, rect.size.height);
+    CGContextDrawImage(context, rect__y_zero, image.CGImage);
+    
+    //flip back
+    CGContextScaleCTM(context, 1.0, -1.0);
+    CGContextTranslateCTM(context, 0, -ty);
+}
+
+//ref: http://stackoverflow.com/a/25293588/2298002
++ (UIImage *)cropImage:(UIImage*)image inRect:(CGRect)rect
+{
+    double (^rad)(double) = ^(double deg) {
+        return deg / 180.0 * M_PI;
+    };
+    
+    CGAffineTransform rectTransform;
+    switch (image.imageOrientation) {
+        case UIImageOrientationLeft:
+            rectTransform = CGAffineTransformTranslate(CGAffineTransformMakeRotation(rad(90)), 0, -image.size.height);
+            break;
+        case UIImageOrientationRight:
+            rectTransform = CGAffineTransformTranslate(CGAffineTransformMakeRotation(rad(-90)), -image.size.width, 0);
+            break;
+        case UIImageOrientationDown:
+            rectTransform = CGAffineTransformTranslate(CGAffineTransformMakeRotation(rad(-180)), -image.size.width, -image.size.height);
+            break;
+        default:
+            rectTransform = CGAffineTransformIdentity;
+    };
+    rectTransform = CGAffineTransformScale(rectTransform, image.scale, image.scale);
+    
+    CGImageRef imageRef = CGImageCreateWithImageInRect([image CGImage], CGRectApplyAffineTransform(rect, rectTransform));
+    UIImage *result = [UIImage imageWithCGImage:imageRef scale:image.scale orientation:image.imageOrientation];
     CGImageRelease(imageRef);
+    
     return result;
 }
 
++ (UIImage*)imageFromImage:(UIImage*)image scaledToSize:(CGSize)newSize
+{
+    UIGraphicsBeginImageContext( newSize );
+    [image drawInRect:CGRectMake(0,0,newSize.width,newSize.height)];
+    UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
+    return newImage;
+}
+
+// Adapted from https://stackoverflow.com/posts/41629535
+-(CGImageRef)CGImageWithCorrectOrientation {
+    CGImageRef myImageRef = self.CGImage;
+    if (self.imageOrientation == UIImageOrientationUp) {
+        return myImageRef;
+    }
+    
+    CGAffineTransform transform = CGAffineTransformIdentity;
+    switch (self.imageOrientation) {
+        case UIImageOrientationRight:
+        case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, 0, self.size.height);
+            transform = CGAffineTransformRotate(transform, -1.0 * M_PI_2);
+            break;
+        case UIImageOrientationLeft:
+        case UIImageOrientationLeftMirrored:
+            transform = CGAffineTransformTranslate(transform, self.size.width, 0);
+            transform = CGAffineTransformRotate(transform, M_PI_2);
+            break;
+        case UIImageOrientationDown:
+        case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, self.size.width, self.size.height);
+            transform = CGAffineTransformRotate(transform, M_PI_2);
+            break;
+        default:
+            break;
+    }
+    
+    switch (self.imageOrientation) {
+        case UIImageOrientationRightMirrored:
+        case UIImageOrientationLeftMirrored:
+            transform = CGAffineTransformTranslate(transform, self.size.height, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+        case UIImageOrientationDownMirrored:
+        case UIImageOrientationUpMirrored:
+            transform = CGAffineTransformTranslate(transform, self.size.width, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+        default:
+            break;
+    }
+    
+    size_t contextWidth;
+    size_t contextHeight;
+    switch (self.imageOrientation) {
+        case UIImageOrientationRightMirrored:
+        case UIImageOrientationLeftMirrored:
+        case UIImageOrientationRight:
+        case UIImageOrientationLeft:
+            contextWidth = CGImageGetHeight(myImageRef);
+            contextHeight = CGImageGetWidth(myImageRef);
+            break;
+        default:
+            contextWidth = CGImageGetWidth(myImageRef);
+            contextHeight = CGImageGetHeight(myImageRef);
+            break;
+    }
+    
+    CGContextRef context = CGBitmapContextCreateWithData(NULL, contextWidth, contextHeight, CGImageGetBitsPerComponent(myImageRef), CGImageGetBytesPerRow(myImageRef), CGImageGetColorSpace(myImageRef), CGImageGetBitmapInfo(myImageRef), NULL, NULL);
+    CGContextConcatCTM(context, transform);
+    CGContextDrawImage(context, CGRectMake(0, 0, contextWidth, contextHeight), myImageRef);
+    CGImageRef outImage = CGBitmapContextCreateImage(context);
+    CFAutorelease(outImage);
+    return outImage;
+}
 
 @end
 

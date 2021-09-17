@@ -1,5 +1,6 @@
 #import "TensorflowLite.h"
 #import "TFLTensorFlowLite.h"
+#import "TFLMetalDelegate.h"
 #import <UIKit/UIKit.h>
 #import "TFRelatedExtensions.h"
 //#import "UIImage-Swift.h"
@@ -113,6 +114,8 @@ RCT_REMAP_METHOD(runModelWithFiles,
     BOOL imageModeIsFit = [argumentsDict[@"imageScaleMode"] isEqualToString:@"fit"];
     NSArray <NSArray <NSNumber *>*>*imageCrops = argumentsDict[@"imageCrops"];
     BOOL cropsAreRelative = [argumentsDict[@"imageCropsMode"] isEqualToString:@"relative"];
+    // if forceCPU is not set, the model is run on GPU if possible.
+    BOOL forceCPU = [argumentsDict[@"forceCPU"] boolValue];
     int stride = 1;
     int numPerGroup = 1;
     if(groupMode) {
@@ -150,8 +153,21 @@ RCT_REMAP_METHOD(runModelWithFiles,
         modelPath = [modelPath substringFromIndex:7];
     }
     
-    TFLInterpreter *interpreter = [[TFLInterpreter alloc] initWithModelPath:modelPath
-                                                                      error:&error];
+    TFLInterpreter *interpreter;
+    // metalDelegate can only be used with 1 interpreter. It cannot be reused even when the interpreter is deallocated already
+    // Would fail with error [MTLDebugDevice newBufferWithBytes:length:options:]:645: `Buffer Validation newBufferWithBytes:pointer must not be nil.`
+    // Noting here in case anyone or me in the future plan to optimize by moving this to the object variable or something
+    TFLMetalDelegate* metalDelegate;
+    
+    if(forceCPU) {
+        interpreter = [[TFLInterpreter alloc] initWithModelPath:modelPath
+                                                          error:&error];
+    }
+    else {
+        metalDelegate = [[TFLMetalDelegate alloc] init];
+        TFLInterpreterOptions* options = [[TFLInterpreterOptions alloc] init];
+        interpreter = [[TFLInterpreter alloc] initWithModelPath:modelPath options:options delegates:@[metalDelegate] error:&error];
+    }
     if (error != nil) { /* Error handling... */
         reject(@"TF_LOAD_ERROR", @"TF Lite model load failed", error);
         return;
@@ -195,7 +211,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
             }
             CGSize shape;
             if(shapes) {
-                shape = CGSizeMake(shapes[i][0].integerValue, shapes[i][1].integerValue);
+                shape = CGSizeMake(shapes[i][1].integerValue, shapes[i][0].integerValue);
             }
             else {
                 NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
@@ -208,12 +224,12 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 }
                 // TODO: MAKE THIS SMARTER NOT THIS DUMB
                 if(tensorshape.count > 3) {
-                    shape.width = tensorshape[1].intValue;
-                    shape.height = tensorshape[2].intValue;
+                    shape.width = tensorshape[2].intValue;
+                    shape.height = tensorshape[1].intValue;
                 }
                 else {
-                    shape.width = tensorshape[0].intValue;
-                    shape.height = tensorshape[1].intValue;
+                    shape.width = tensorshape[1].intValue;
+                    shape.height = tensorshape[0].intValue;
                 }
             }
             NSData *data;
@@ -262,9 +278,6 @@ RCT_REMAP_METHOD(runModelWithFiles,
         // See documentation on data types at source here
         // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
         NSMutableArray *outTensors = [NSMutableArray new];
-        // With this implementation it doesn't crash with only one image supplied however..
-        // now this is weird, if we call model only once then it does not crash, call it five times however, and it crashes again at the React native bridge
-        // Maybe it's something to do with sizes of values that are passed through the bridge then.
         for(NSUInteger i = 0; i < outTensorCount; i++) {
             NSMutableArray *outData = [NSMutableArray new];
             TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
@@ -357,6 +370,41 @@ RCT_REMAP_METHOD(runModelWithFiles,
     resolve(batchOutput);
 }
 
+RCT_REMAP_METHOD(tensorImageTest,
+                 tensorImageTestWithArgs:(nonnull NSDictionary *)argumentsDict
+                 withResolver:(RCTPromiseResolveBlock)resolve
+                 withRejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSString *filePath = argumentsDict[@"file"];
+    NSDictionary *sizeToFit = argumentsDict[@"size"] ?: @{@"width": @(134), @"height": @(80)};
+    NSArray <NSNumber *>*crops = argumentsDict[@"relativeCrops"];
+    CGSize sizeTo = CGSizeMake([sizeToFit[@"width"] doubleValue], [sizeToFit[@"height"] doubleValue]);
+    BOOL opaque;
+    if([argumentsDict objectForKey:@"opaque"]) {
+        opaque = [argumentsDict[@"opaque"] boolValue];
+    }
+    else {
+        opaque = YES;
+    }
+    double scale = [argumentsDict[@"scale"] floatValue] ?: 1;
+    NSString *backgroundColor = argumentsDict[@"backgroundColor"] ?: @"#000000";
+    UIColor *bg = [self colorFromHexString: backgroundColor];
+    NSString *actualFilePath;
+    if([filePath hasPrefix:@"file://"]) {
+        actualFilePath = [filePath substringFromIndex:7];
+    }
+    else {
+        actualFilePath = filePath;
+    }
+    UIImage *image = [UIImage imageWithContentsOfFile:actualFilePath];
+    if(crops) {
+        image = [image relativeCropToX:crops[0].doubleValue y:crops[1].doubleValue width:crops[2].doubleValue height:crops[3].doubleValue];
+    }
+    UIImage *result = [image imageFittedToSize:sizeTo opaque:opaque scale:scale backgroundColor:bg];
+    resolve([self encodeToBase64String: result]);
+}
+
+
 -(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit {
     NSString *actualFilePath;
     if([filePath hasPrefix:@"file://"]) {
@@ -418,6 +466,18 @@ RCT_REMAP_METHOD(runModelWithFiles,
         data = [image scaledDataWithSize:shape isQuantized:NO];
     }
     return data;
+}
+
+-(UIColor *)colorFromHexString:(NSString *)hexString {
+    unsigned rgbValue = 0;
+    NSScanner *scanner = [NSScanner scannerWithString:hexString];
+    [scanner setScanLocation:1]; // bypass '#' character
+    [scanner scanHexInt:&rgbValue];
+    return [UIColor colorWithRed:((rgbValue & 0xFF0000) >> 16)/255.0 green:((rgbValue & 0xFF00) >> 8)/255.0 blue:(rgbValue & 0xFF)/255.0 alpha:1.0];
+}
+
+- (NSString *)encodeToBase64String:(UIImage *)image {
+ return [UIImagePNGRepresentation(image) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
 }
 
 

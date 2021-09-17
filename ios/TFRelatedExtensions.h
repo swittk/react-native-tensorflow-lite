@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
  */
 -(UIImage *)imageFittedToSize:(CGSize)sizeTarget;
 -(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale;
--(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(UIColor *)bgColor;
+-(UIImage *)imageFittedToSize:(CGSize) sizeTarget opaque:(BOOL)opaque scale:(float)scale backgroundColor:(nullable UIColor *)bgColor;
 
 +(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size;
 +(CGImageRef)normalizeImage:(CGImageRef)image resizingToSize:(CGSize)size;

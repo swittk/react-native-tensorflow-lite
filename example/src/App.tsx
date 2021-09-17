@@ -4,6 +4,7 @@ import { StyleSheet, View, Text, Alert, Button, Image, ScrollView } from 'react-
 import TensorflowLite, { SKTFLiteTensorResult } from '@switt/react-native-tensorflow-lite';
 import { Asset } from 'expo-asset';
 import * as ImagePicker from 'expo-image-picker';
+import { TestImageScaler } from './TestImageScaler';
 
 
 type Props = {};
@@ -104,6 +105,7 @@ export default class App extends React.PureComponent<Props, State> {
           <Button title="try check params" onPress={this.checkSampleModelParams} />
           <Image source={{ uri: imageUri }} style={{ width: 320, height: 320 }} resizeMode='contain' />
           <Text>Result: {JSON.stringify(results)}</Text>
+          {imageUri && <TestImageScaler imageUri={imageUri}/>}
         </ScrollView>
       </View>
     );
