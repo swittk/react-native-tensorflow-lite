@@ -105,7 +105,10 @@ export default class App extends React.PureComponent<Props, State> {
           <Button title="try check params" onPress={this.checkSampleModelParams} />
           <Image source={{ uri: imageUri }} style={{ width: 320, height: 320 }} resizeMode='contain' />
           <Text>Result: {JSON.stringify(results)}</Text>
-          {imageUri && <TestImageScaler imageUri={imageUri}/>}
+          {imageUri && <TestImageScaler
+            imageUri={imageUri}
+            faceLandmarkResults={results}
+          />}
         </ScrollView>
       </View>
     );

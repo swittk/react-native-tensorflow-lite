@@ -13,13 +13,12 @@ CGSize CGSizeFittingSize(
                          )
 {
     CGSize ret;
-    float fw;
-    float fh;
-    float f;
-    
-    fw = (float) (sizeTarget.width / sizeImage.width);
-    fh = (float) (sizeTarget.height / sizeImage.height);
-    f = MIN(fw, fh);
+    CGFloat fw;
+    CGFloat fh;
+    CGFloat f;
+    fw = (CGFloat) (sizeTarget.width / sizeImage.width);
+    fh = (CGFloat) (sizeTarget.height / sizeImage.height);
+    f = fw < fh ? fw : fh;
     ret = (CGSize){
         .width =  sizeImage.width * f,
         .height = sizeImage.height * f
@@ -49,7 +48,14 @@ void SafeLog(NSString *str) {
     }
     return [UIImage normalizedDataFromImage:self.CGImage resizingToSize:size];
 }
-+(CGImageRef)normalizeImage:(CGImageRef)image resizingToSize:(CGSize)size {
+/**
+ Normalizes and resizes the given image.
+ If the image is the same size and colorspace as wanted. the same CGImageRef is RETAINED and returned.
+ If a new image is created, it is a new CGImageRef
+ 
+ **(you MUST RELEASE the return value)**.
+ */
++(CGImageRef)createNormalizeImage:(CGImageRef)image resizingToSize:(CGSize)size {
     CGImageRetain(image);
     // Don't forget to release the image before ALL returns
     
@@ -70,7 +76,6 @@ void SafeLog(NSString *str) {
             CFRelease(colorSpace);
             // Return the image if it is in the right format
             // to save a redraw operation.
-            CFAutorelease(image);
             return image;
         }
     }
@@ -120,29 +125,35 @@ void SafeLog(NSString *str) {
     CGImageRef createdImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     CGImageRelease(image);
-    CFAutorelease(createdImage);
     return createdImage;
 }
 
 +(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size {
-    CGImageRef normalizedImage = [self normalizeImage:image resizingToSize:size];
+    CGImageRef normalizedImage = [self createNormalizeImage:image resizingToSize:size];
     if(!normalizedImage) {
         SafeLog(@"NormalizedImage result was nil");
         return nil;
     }
-    CGImageRetain(normalizedImage);
+//    NSLog(@"NormalizedImageSize %zu, %zu", CGImageGetWidth(normalizedImage), CGImageGetHeight(normalizedImage)); Size is correct
     CGDataProviderRef dataProvider = CGImageGetDataProvider(normalizedImage);
     CFDataRef data = CGDataProviderCopyData(dataProvider);
     //    CGDataProviderRelease(dataProvider); // Likely cause of error : "Get"DataProvider = we shouldn't free it.
-    CGImageRelease(normalizedImage);
-    if(!data) { SafeLog(@"Failed to get data from image"); return nil; };
+    if(!data) {
+        SafeLog(@"Failed to get data from image");
+        CGImageRelease(normalizedImage);
+        return nil;
+    };
     // After here we shall not return before the end of the function
     // Because data must be freed.
-    
+    size_t bytesPerRow = CGImageGetBytesPerRow(normalizedImage);
     size_t bitsPerPixel = CGImageGetBitsPerPixel(normalizedImage);
     size_t bitsPerComponent = CGImageGetBitsPerComponent(normalizedImage);
     CGImageAlphaInfo imageAlphaInfo = CGImageGetAlphaInfo(normalizedImage);
     CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(normalizedImage);
+    size_t imageHeight = CGImageGetHeight(normalizedImage);
+    size_t imageWidth = CGImageGetWidth(normalizedImage);
+    CGImageRelease(normalizedImage);
+    
     NSData *outData = nil;
     // TF Lite expects an array of pixels in the form of floats normalized between 0 and 1.
     //    var floatArray: [T]
@@ -261,8 +272,18 @@ void SafeLog(NSString *str) {
             }
             
             CFIndex dataLength = CFDataGetLength(data);
+            size_t expectedByteWidth = imageWidth * 4;
+            // The number of bytes to skip once end of row is reached
+            size_t numToSkip = 0;
+            if(bytesPerRow != expectedByteWidth) {
+                // Using dataLength directly sometimes doesn't work, in the case of on-device manipulation,
+                // sometimes there are extra `buffer pixels` appended to the end of each row. (data is all zeros, and isn't ever present in normal use of UIImage/CGImage)
+                numToSkip = bytesPerRow - expectedByteWidth;
+//                NSLog(@"needs padding by %lu bytes", numToSkip);
+            }
             // We have 3 Float32 channels (RGB) out, while the input was Int32 for RGBA.
-            size_t allocLen = sizeof(Float32) * 3 * dataLength / 4;
+            CFIndex actualDataLength = (bytesPerRow - numToSkip) * imageHeight;
+            size_t allocLen = sizeof(Float32) * 3 * actualDataLength / 4; // Use bytes
             Float32 *outBytes = malloc(allocLen);
             
             Float32 maximumChannelValue = 255; // 2 ^ 8 - 1
@@ -273,6 +294,9 @@ void SafeLog(NSString *str) {
             // My Note : Basically just rearrange in each Float32 byte why say it so verbosely..
             NSUInteger outBytesIndex = 0;
             for(NSUInteger byteIndex = 0; byteIndex < dataLength; byteIndex += 4) {
+                if(numToSkip != 0 && (byteIndex + numToSkip) % bytesPerRow == 0) { // If at end of row... (check numToSkip first because modulo is expensive)
+                    byteIndex += numToSkip; // add skip bytes if needed
+                }
                 Float32 red, green, blue;
                 UInt8 channelData[4];
                 CFDataGetBytes(data, CFRangeMake(byteIndex, 4), channelData);
@@ -309,7 +333,7 @@ void SafeLog(NSString *str) {
     CGSize size = self.size;
     UIImage *ret;
     sizeNewImage = CGSizeFittingSize(size, sizeTarget);
-    UIGraphicsBeginImageContextWithOptions(sizeTarget, opaque, 1.0f);
+    UIGraphicsBeginImageContextWithOptions(sizeTarget, opaque, scale);
     CGContextRef context = UIGraphicsGetCurrentContext();
     if(bgColor) {
         CGContextSetFillColorWithColor(context, bgColor.CGColor);
@@ -318,9 +342,11 @@ void SafeLog(NSString *str) {
     // These two lines convert coordinate system to top left
     CGContextScaleCTM(context, 1, -1);
     CGContextTranslateCTM(context, 0, -sizeNewImage.height);
+    
     CGFloat originX = (sizeTarget.width - sizeNewImage.width)/2.0;
     CGFloat originY = (sizeTarget.height - sizeNewImage.height)/2.0;
-    CGContextDrawImage(context, CGRectMake(originX, originY, sizeNewImage.width, sizeNewImage.height), [self CGImageWithCorrectOrientation]);
+    CGRect drawToRect = CGRectMake(originX, originY, sizeNewImage.width, sizeNewImage.height);
+    CGContextDrawImage(context, drawToRect, [self CGImageWithCorrectOrientation]);
     ret = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return ret;
@@ -343,13 +369,11 @@ void SafeLog(NSString *str) {
                              y*self.scale,
                              width*self.scale,
                              height*self.scale);
-    NSLog(@"cropping to rect %@", NSStringFromCGRect(rect));
     CGImageRef imageRef = CGImageCreateWithImageInRect([self CGImageWithCorrectOrientation], rect);
     UIImage *result = [UIImage imageWithCGImage:imageRef
                                           scale:self.scale
                                     orientation:UIImageOrientationUp];
     CGImageRelease(imageRef);
-    NSLog(@"resulting image dims %@", NSStringFromCGSize(result.size));
     return result;
 }
 -(UIImage *)relativeCropToX:(CGFloat)x y:(CGFloat)y width:(CGFloat)width height:(CGFloat)height {
@@ -479,6 +503,13 @@ void SafeLog(NSString *str) {
     CGImageRef outImage = CGBitmapContextCreateImage(context);
     CFAutorelease(outImage);
     return outImage;
+}
+/**
+ Create CGBitmapContext with the same size, width, and properties for the given CGImageRef
+ */
+-(CGContextRef)CreateCGBitmapContextFromCGImageRef:(CGImageRef)imageRef {
+    CGContextRef context = CGBitmapContextCreateWithData(NULL, CGImageGetWidth(imageRef), CGImageGetHeight(imageRef), CGImageGetBitsPerComponent(imageRef), CGImageGetBytesPerRow(imageRef), CGImageGetColorSpace(imageRef), CGImageGetBitmapInfo(imageRef), NULL, NULL);
+    return context;
 }
 
 @end
