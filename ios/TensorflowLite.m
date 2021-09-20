@@ -200,172 +200,178 @@ RCT_REMAP_METHOD(runModelWithFiles,
     // The cap file index to not reach when enumerating the files (limited by group inputs)
     NSInteger capFileIndex = filePaths.count - (numPerGroup - 1);
     for(NSInteger inputIndex = 0; inputIndex < capFileIndex; inputIndex += stride) {
-        for(NSUInteger i = 0; i < tensorCount; i++) {
-            TFLTensor *tensor = [interpreter inputTensorAtIndex:0 error:&error];
-            if(error != nil) {
-                reject(
-                       @"TF_INPUT_TENSOR_ERROR",
-                       [NSString stringWithFormat:@"TF Lite failed to get tensor at index %lu", i],
-                       error);
-                return;
-            }
-            CGSize shape;
-            if(shapes) {
-                shape = CGSizeMake(shapes[i][1].integerValue, shapes[i][0].integerValue);
-            }
-            else {
-                NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
-                if(error) {
+        // Add autoreleasepool here because, similar to here https://bluelemonbits.com/2018/10/06/dealing-with-uigraphicsgetimagefromcurrentimagecontext-memory-leaks/
+        // When UIImage is resized (as I call in the -orientationUpImage method), I use UIGraphicsGetImageFromCurrentImageContext
+        // which as explained in that article, will hold onto the image in memory until the code returns control to the runloop.
+        @autoreleasepool {
+            for(NSUInteger i = 0; i < tensorCount; i++) {
+                TFLTensor *tensor = [interpreter inputTensorAtIndex:0 error:&error];
+                if(error != nil) {
                     reject(
-                           @"TF_SHAPE_ERROR",
-                           [NSString stringWithFormat:@"TF Lite failed to get shape for tensor at index %lu", i],
+                           @"TF_INPUT_TENSOR_ERROR",
+                           [NSString stringWithFormat:@"TF Lite failed to get tensor at index %lu", i],
                            error);
                     return;
                 }
-                // TODO: MAKE THIS SMARTER NOT THIS DUMB
-                if(tensorshape.count > 3) {
-                    shape.width = tensorshape[2].intValue;
-                    shape.height = tensorshape[1].intValue;
+                CGSize shape;
+                if(shapes) {
+                    shape = CGSizeMake(shapes[i][1].integerValue, shapes[i][0].integerValue);
                 }
                 else {
-                    shape.width = tensorshape[1].intValue;
-                    shape.height = tensorshape[0].intValue;
-                }
-            }
-            NSData *data;
-            if(numPerGroup > 1) {
-                NSMutableData *groupData = [NSMutableData new];
-                if(imageCrops) {
-                    for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
-                        NSInteger inputFileIndex = inputIndex + groupIndex;
-                        NSString *filePath = filePaths[inputFileIndex];
-                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex] cropsAreRelative: cropsAreRelative];
-                        [groupData appendData:data];
+                    NSArray <NSNumber *>*tensorshape = [tensor shapeWithError:&error];
+                    if(error) {
+                        reject(
+                               @"TF_SHAPE_ERROR",
+                               [NSString stringWithFormat:@"TF Lite failed to get shape for tensor at index %lu", i],
+                               error);
+                        return;
                     }
+                    // TODO: MAKE THIS SMARTER NOT THIS DUMB
+                    if(tensorshape.count > 3) {
+                        shape.width = tensorshape[2].intValue;
+                        shape.height = tensorshape[1].intValue;
+                    }
+                    else {
+                        shape.width = tensorshape[1].intValue;
+                        shape.height = tensorshape[0].intValue;
+                    }
+                }
+                NSData *data;
+                if(numPerGroup > 1) {
+                    NSMutableData *groupData = [NSMutableData new];
+                    if(imageCrops) {
+                        for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
+                            NSInteger inputFileIndex = inputIndex + groupIndex;
+                            NSString *filePath = filePaths[inputFileIndex];
+                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex] cropsAreRelative: cropsAreRelative];
+                            [groupData appendData:data];
+                        }
+                    }
+                    else {
+                        for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
+                            NSInteger inputFileIndex = inputIndex + groupIndex;
+                            NSString *filePath = filePaths[inputFileIndex];
+                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit];
+                            [groupData appendData:data];
+                        }
+                    }
+                    data = groupData;
                 }
                 else {
-                    for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
-                        NSInteger inputFileIndex = inputIndex + groupIndex;
-                        NSString *filePath = filePaths[inputFileIndex];
-                        data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit];
-                        [groupData appendData:data];
-                    }
+                    NSString *filePath = filePaths[inputIndex];
+                    data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil cropsAreRelative: cropsAreRelative];
                 }
-                data = groupData;
+                [tensor copyData:data error:&error];
+                if(error != nil) {
+                    reject(
+                           @"TF_INPUT_COPY_ERROR",
+                           [NSString stringWithFormat:@"TF Lite failed to copy tensor at index %lu", i],
+                           error);
+                    return;
+                }
+                
             }
-            else {
-                NSString *filePath = filePaths[inputIndex];
-                data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil cropsAreRelative: cropsAreRelative];
-            }
-            [tensor copyData:data error:&error];
-            if(error != nil) {
+            BOOL ok = [interpreter invokeWithError:&error];
+            if(!ok || (error != nil)) {
                 reject(
-                       @"TF_INPUT_COPY_ERROR",
-                       [NSString stringWithFormat:@"TF Lite failed to copy tensor at index %lu", i],
+                       @"TF_INVOKE_ERROR",
+                       [NSString stringWithFormat:@"TF Lite invocation failed for file at path %@", filePaths[inputIndex]],
                        error);
                 return;
             }
-        }
-        BOOL ok = [interpreter invokeWithError:&error];
-        if(!ok || (error != nil)) {
-            reject(
-                   @"TF_INVOKE_ERROR",
-                   [NSString stringWithFormat:@"TF Lite invocation failed for file at path %@", filePaths[inputIndex]],
-                   error);
-            return;
-        }
-        
-        // See documentation on data types at source here
-        // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
-        NSMutableArray *outTensors = [NSMutableArray new];
-        for(NSUInteger i = 0; i < outTensorCount; i++) {
-            NSMutableArray *outData = [NSMutableArray new];
-            TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
-            NSArray <NSNumber *>*shape = [outputi shapeWithError:&error];
-            if(error) {
-                reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get shape for tensor at index %lu", i], error);
-                return;
-            }
-            NSData *data = [outputi dataWithError:&error];
-            if(error) {
-                reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get output data for tensor at index %lu", i], error);
-                return;
-            }
-            switch(outputi.dataType) {
-                case TFLTensorDataTypeFloat32: {
-                    for(NSUInteger i = 0; i < [data length]; i+=4) {
-                        Float32 val;
-                        [data getBytes:&val range:NSMakeRange(i, 4)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeFloat16: {
-                    for(NSUInteger i = 0; i < [data length]; i+=2) {
-                        Float32 val;
-                        [data getBytes:&val range:NSMakeRange(i, 2)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeInt32: {
-                    for(NSUInteger i = 0; i < [data length]; i+=4) {
-                        SInt32 val;
-                        [data getBytes:&val range:NSMakeRange(i, 4)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeUInt8: {
-                    for(NSUInteger i = 0; i < [data length]; i+=1) {
-                        UInt8 val;
-                        [data getBytes:&val range:NSMakeRange(i, 1)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeInt64: {
-                    for(NSUInteger i = 0; i < [data length]; i+=8) {
-                        SInt64 val;
-                        [data getBytes:&val range:NSMakeRange(i, 8)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeBool: {
-                    for(NSUInteger i = 0; i < [data length]; i+=1) {
-                        BOOL val;
-                        [data getBytes:&val range:NSMakeRange(i, 1)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeInt16: {
-                    for(NSUInteger i = 0; i < [data length]; i+=2) {
-                        SInt16 val;
-                        [data getBytes:&val range:NSMakeRange(i, 2)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeInt8: {
-                    for(NSUInteger i = 0; i < [data length]; i+=1) {
-                        SInt8 val;
-                        [data getBytes:&val range:NSMakeRange(i, 1)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                case TFLTensorDataTypeFloat64: {
-                    for(NSUInteger i = 0; i < [data length]; i+=8) {
-                        Float64 val;
-                        [data getBytes:&val range:NSMakeRange(i, 8)];
-                        [outData addObject:@(val)];
-                    }
-                } break;
-                default: {
-                    reject(@"TF_OUTPUT_ERROR", @"TFLite encountered an unknown output data type", [NSError new]);
+            
+            // See documentation on data types at source here
+            // https://github.com/tensorflow/tensorflow/blob/b0baa1cbeeb62fc55a21c1ebf980d22e1099fd56/tensorflow/lite/objc/apis/TFLTensor.h
+            NSMutableArray *outTensors = [NSMutableArray new];
+            for(NSUInteger i = 0; i < outTensorCount; i++) {
+                NSMutableArray *outData = [NSMutableArray new];
+                TFLTensor *outputi = [interpreter outputTensorAtIndex:i error:&error];
+                NSArray <NSNumber *>*shape = [outputi shapeWithError:&error];
+                if(error) {
+                    reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get shape for tensor at index %lu", i], error);
                     return;
-                } break;
+                }
+                NSData *data = [outputi dataWithError:&error];
+                if(error) {
+                    reject(@"TF_OUTPUT_ERROR", [NSString stringWithFormat:@"Failed to get output data for tensor at index %lu", i], error);
+                    return;
+                }
+                switch(outputi.dataType) {
+                    case TFLTensorDataTypeFloat32: {
+                        for(NSUInteger i = 0; i < [data length]; i+=4) {
+                            Float32 val;
+                            [data getBytes:&val range:NSMakeRange(i, 4)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeFloat16: {
+                        for(NSUInteger i = 0; i < [data length]; i+=2) {
+                            Float32 val;
+                            [data getBytes:&val range:NSMakeRange(i, 2)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeInt32: {
+                        for(NSUInteger i = 0; i < [data length]; i+=4) {
+                            SInt32 val;
+                            [data getBytes:&val range:NSMakeRange(i, 4)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeUInt8: {
+                        for(NSUInteger i = 0; i < [data length]; i+=1) {
+                            UInt8 val;
+                            [data getBytes:&val range:NSMakeRange(i, 1)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeInt64: {
+                        for(NSUInteger i = 0; i < [data length]; i+=8) {
+                            SInt64 val;
+                            [data getBytes:&val range:NSMakeRange(i, 8)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeBool: {
+                        for(NSUInteger i = 0; i < [data length]; i+=1) {
+                            BOOL val;
+                            [data getBytes:&val range:NSMakeRange(i, 1)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeInt16: {
+                        for(NSUInteger i = 0; i < [data length]; i+=2) {
+                            SInt16 val;
+                            [data getBytes:&val range:NSMakeRange(i, 2)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeInt8: {
+                        for(NSUInteger i = 0; i < [data length]; i+=1) {
+                            SInt8 val;
+                            [data getBytes:&val range:NSMakeRange(i, 1)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    case TFLTensorDataTypeFloat64: {
+                        for(NSUInteger i = 0; i < [data length]; i+=8) {
+                            Float64 val;
+                            [data getBytes:&val range:NSMakeRange(i, 8)];
+                            [outData addObject:@(val)];
+                        }
+                    } break;
+                    default: {
+                        reject(@"TF_OUTPUT_ERROR", @"TFLite encountered an unknown output data type", [NSError new]);
+                        return;
+                    } break;
+                }
+                [outTensors addObject:@{
+                    @"shape": shape,
+                    @"data": outData
+                }];
             }
-            [outTensors addObject:@{
-                @"shape": shape,
-                @"data": outData
-            }];
+            [batchOutput addObject:outTensors];
         }
-        [batchOutput addObject:outTensors];
     }
     resolve(batchOutput);
 }
@@ -477,7 +483,7 @@ RCT_REMAP_METHOD(tensorImageTest,
 }
 
 - (NSString *)encodeToBase64String:(UIImage *)image {
- return [UIImagePNGRepresentation(image) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+    return [UIImagePNGRepresentation(image) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
 }
 
 
