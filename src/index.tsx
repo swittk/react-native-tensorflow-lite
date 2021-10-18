@@ -51,7 +51,8 @@ export type SKTFLiteRunModelWithFilesArg = {
   imageCrops?: [number, number, number, number][],
   /** The mode of the crops. If 'relative' then the inputs are from 0-1, 'absolute' then the inputs are absolute coordinates. Defaults to 'absolute' */
   imageCropsMode?: 'absolute' | 'relative',
-
+  /** If this is true, converts the images to grayscale before inputting to the neural network */
+  grayscale?: boolean,
   /** If inference on CPU is preferred (defaults to GPU/Metal, coreML might be supported soon) */
   forceCPU?: boolean,
 }
@@ -70,6 +71,7 @@ export type SKTFLiteTensorImageTestArgs = {
   size?: {width: number, height: number},
   relativeCrops?: [number, number, number, number],
   opaque?: boolean,
+  /** The image scale */
   scale?: number,
   backgroundColor?: string,
 }

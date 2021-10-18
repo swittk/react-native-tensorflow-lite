@@ -42,11 +42,14 @@ void SafeLog(NSString *str) {
 }
 -(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized {
     //    SafeLog(@"I Should be logged, always");
+    return [self scaledDataWithSize:size isQuantized:isQuantized grayscale:NO];
+}
+-(NSData *)scaledDataWithSize:(CGSize)size isQuantized:(BOOL)isQuantized grayscale:(BOOL)grayscale {
     if(!self.CGImage) {
         SafeLog(@"I don't have CGIMAGE");
         return nil;
     }
-    return [UIImage normalizedDataFromImage:self.CGImage resizingToSize:size];
+    return [UIImage normalizedDataFromImage:self.CGImage resizingToSize:size grayscale:grayscale];
 }
 /**
  Normalizes and resizes the given image.
@@ -129,6 +132,9 @@ void SafeLog(NSString *str) {
 }
 
 +(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size {
+    return [self normalizedDataFromImage:image resizingToSize:size grayscale:NO];
+}
++(NSData *)normalizedDataFromImage:(CGImageRef)image resizingToSize:(CGSize)size grayscale:(BOOL)grayscale {
     CGImageRef normalizedImage = [self createNormalizeImage:image resizingToSize:size];
     if(!normalizedImage) {
         SafeLog(@"NormalizedImage result was nil");
@@ -199,6 +205,9 @@ void SafeLog(NSString *str) {
             UInt16 redMask   = 0b0111110000000000;
             UInt16 greenMask  = 0b0000001111100000;
             UInt16 blueMask   = 0b0000000000011111;
+
+            // Note : I wrote the color output thing first...
+            if(!grayscale) {
             // We allocate 3/2 of the data length because..
             //  1. The original data is 16 bits for RGB color (5 bits per RGB channel)
             // 2. Tensorflow expects Float32 data out in format of RGB (Float32 per channel)
@@ -239,6 +248,48 @@ void SafeLog(NSString *str) {
             // alpha and non-alpha images identically.
             outData = [NSData dataWithBytesNoCopy:outBytes length:totalAlloc];
             //            SafeLog([NSString stringWithFormat:@"Outdata16 is %@", outData]);
+            }
+            else {
+                // Is grayscale output
+            // We allocate 1/2 of the data length because..
+            //  1. The original data is 16 bits for RGB color (5 bits per RGB channel)
+            // 2. We expects Float32 data out in format of grayscale (single Float32 channel)
+            //  That means == 1 * sizeof(Float32) per 2 bytes.
+            size_t totalAlloc = sizeof(Float32) * dataLength * 1/2;
+            Float32 *outBytes = malloc(totalAlloc);
+            
+            for(NSUInteger byteIndex = 0; byteIndex < dataLength; byteIndex = byteIndex + 2) {
+                CFRange pixelRange = CFRangeMake(byteIndex, byteIndex + 1);
+                UInt8 rawPixel[2];
+                UInt16 pixel;
+                CFDataGetBytes(data, pixelRange, rawPixel);
+                if(bigEndian) {
+                    // Big endian = More significant bytes come first
+                    pixel = ((UInt16)rawPixel[0] << 8) | rawPixel[1];
+                }
+                else {
+                    // Little endian = Less significant bytes come first
+                    pixel = ((UInt16)rawPixel[1] << 8) | rawPixel[0];
+                }
+                UInt16 redChannel   = ((pixel & redMask) >> 10);
+                UInt16 greenChannel = ((pixel & greenMask) >> 5);
+                UInt16 blueChannel  = ((pixel & blueMask) >> 0);
+                
+                Float32 maximumChannelValue = 31; // 2 ^ 5 - 1
+                Float32 red   = (Float32)(redChannel) / maximumChannelValue;
+                Float32 green = (Float32)(greenChannel) / maximumChannelValue;
+                Float32 blue  = (Float32)(blueChannel) / maximumChannelValue;
+                
+                NSUInteger pixelIndex = byteIndex / 2;
+                NSUInteger floatIndex = pixelIndex;
+                // grayscale = R * 0.2126 + G * 0.7152 + B * 0.0722
+                outBytes[floatIndex] = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+            }
+            // Note From Tensorflow implementation:
+            // We discard the image's alpha channel before running the TF Lite model, so we can treat
+            // alpha and non-alpha images identically.
+            outData = [NSData dataWithBytesNoCopy:outBytes length:totalAlloc];
+            }
         } break;
         case 32: {
             if(bitsPerComponent != 8){ SafeLog(@"BitsPerComponent not 8"); break;}
@@ -281,8 +332,12 @@ void SafeLog(NSString *str) {
                 numToSkip = bytesPerRow - expectedByteWidth;
 //                NSLog(@"needs padding by %lu bytes", numToSkip);
             }
-            // We have 3 Float32 channels (RGB) out, while the input was Int32 for RGBA.
             CFIndex actualDataLength = (bytesPerRow - numToSkip) * imageHeight;
+
+            // Note : I wrote the color output thing first...
+            if(!grayscale) {
+                // RGB output (default)
+            // We have 3 Float32 channels (RGB) out, while the input was Int32 for RGBA.
             size_t allocLen = sizeof(Float32) * 3 * actualDataLength / 4; // Use bytes
             Float32 *outBytes = malloc(allocLen);
             
@@ -312,6 +367,37 @@ void SafeLog(NSString *str) {
             }
             outData = [NSData dataWithBytesNoCopy:outBytes length:allocLen];
             //            SafeLog([NSString stringWithFormat:@"Outdata32 is %@", outData]);
+            }
+            else {
+                // We have 1 Float32 channel (grayscale) out, while the input was Int32 for RGBA.
+            size_t allocLen = sizeof(Float32) * 1 * actualDataLength / 4; // Use bytes
+            Float32 *outBytes = malloc(allocLen);
+            
+            Float32 maximumChannelValue = 255; // 2 ^ 8 - 1
+            // TF Note:
+            // Iterate over channels individually. Since the order of the channels in memory
+            // may vary, we cannot add channels to the float buffer we pass to TF Lite in the
+            // order that they are iterated over.
+            // My Note : Basically just rearrange in each Float32 byte why say it so verbosely..
+            NSUInteger outBytesIndex = 0;
+            for(NSUInteger byteIndex = 0; byteIndex < dataLength; byteIndex += 4) {
+                if(numToSkip != 0 && (byteIndex + numToSkip) % bytesPerRow == 0) { // If at end of row... (check numToSkip first because modulo is expensive)
+                    byteIndex += numToSkip; // add skip bytes if needed
+                }
+                Float32 red, green, blue;
+                UInt8 channelData[4];
+                CFDataGetBytes(data, CFRangeMake(byteIndex, 4), channelData);
+                red = (Float32)channelData[redOffset]/maximumChannelValue;
+                green = (Float32)channelData[greenOffset]/maximumChannelValue;
+                blue = (Float32)channelData[blueOffset]/maximumChannelValue;
+                // Ignore alpha; useless for us lmao
+
+                // grayscale = R * 0.2126 + G * 0.7152 + B * 0.0722
+                outBytes[outBytesIndex] = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+                outBytesIndex += 1;
+            }
+            outData = [NSData dataWithBytesNoCopy:outBytes length:allocLen];
+            }
         } break;
         default:{
             SafeLog(@"Unsupported format from image");

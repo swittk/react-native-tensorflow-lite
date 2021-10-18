@@ -18,7 +18,8 @@ export default class App extends React.PureComponent<Props, State> {
     this.state = {};
   }
   checkSampleModelParams = async () => {
-    const modelAsset = Asset.fromModule(require('./samplemodel.tflite'));
+    // const modelAsset = Asset.fromModule(require('./samplemodel.tflite'));
+    const modelAsset = Asset.fromModule(require('./fullfacetwitch.tflite'));
     if (!modelAsset.downloaded) { await modelAsset.downloadAsync() };
     try {
       const results = await TensorflowLite.getModelInfo({
@@ -28,7 +29,6 @@ export default class App extends React.PureComponent<Props, State> {
     } catch (e) {
       Alert.alert(`Model info failed with error ${e.message || e.code} (${JSON.stringify(e)})`)
     }
-
   }
   runModel = async () => {
     const { imageUri } = this.state;
@@ -60,6 +60,35 @@ export default class App extends React.PureComponent<Props, State> {
       const results = await TensorflowLite.runModelWithFiles({
         model: modelAsset.localUri!,
         files: [imageUri, imageUri, imageUri, imageUri, imageUri]
+      });
+      this.setState({ results });
+    } catch (e) {
+      Alert.alert(`Run failed with error ${e.message || e.code} (${JSON.stringify(e)})`)
+    }
+  }
+
+  runGrayscaleModel = async () => {
+    const { imageUri } = this.state;
+    if (!imageUri) {
+      Alert.alert('No Image selected');
+      return;
+    }
+    const modelAsset = Asset.fromModule(require('./fullfacetwitch.tflite'));
+    if (!modelAsset.downloaded) { await modelAsset.downloadAsync() };
+    try {
+      const results = await TensorflowLite.runModelWithFiles({
+        model: modelAsset.localUri!,
+        shapes: [[432, 432]],
+        files: [
+          imageUri, imageUri, imageUri, imageUri, imageUri,
+          imageUri, imageUri, imageUri, imageUri, imageUri,
+          imageUri, imageUri, imageUri, imageUri, imageUri,
+          imageUri
+        ],
+        groupMode: {
+          numPerGroup: 16,
+        },
+        grayscale: true
       });
       this.setState({ results });
     } catch (e) {
@@ -102,6 +131,7 @@ export default class App extends React.PureComponent<Props, State> {
           <Button title="Pick image" onPress={this.pickImage} />
           <Button title="Run model" onPress={this.runModel} />
           <Button title="Run model 5 times" onPress={this.runModelFiveTimes} />
+          <Button title="Run grayscale model" onPress={this.runGrayscaleModel} />
           <Button title="try check params" onPress={this.checkSampleModelParams} />
           <Image source={{ uri: imageUri }} style={{ width: 320, height: 320 }} resizeMode='contain' />
           <Text>Result: {JSON.stringify(results)}</Text>

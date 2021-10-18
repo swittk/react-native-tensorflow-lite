@@ -116,6 +116,9 @@ RCT_REMAP_METHOD(runModelWithFiles,
     BOOL cropsAreRelative = [argumentsDict[@"imageCropsMode"] isEqualToString:@"relative"];
     // if forceCPU is not set, the model is run on GPU if possible.
     BOOL forceCPU = [argumentsDict[@"forceCPU"] boolValue];
+    // If grayscale is specified, use grayscale mode
+    BOOL grayscale = [argumentsDict[@"grayscale"] boolValue];
+    
     int stride = 1;
     int numPerGroup = 1;
     if(groupMode) {
@@ -243,7 +246,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
                         for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
                             NSInteger inputFileIndex = inputIndex + groupIndex;
                             NSString *filePath = filePaths[inputFileIndex];
-                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex] cropsAreRelative: cropsAreRelative];
+                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops[inputFileIndex] cropsAreRelative:cropsAreRelative grayscale:grayscale];
                             [groupData appendData:data];
                         }
                     }
@@ -251,7 +254,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
                         for(int groupIndex = 0; groupIndex < numPerGroup; groupIndex++) {
                             NSInteger inputFileIndex = inputIndex + groupIndex;
                             NSString *filePath = filePaths[inputFileIndex];
-                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit];
+                            data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit grayscale:grayscale];
                             [groupData appendData:data];
                         }
                     }
@@ -259,7 +262,7 @@ RCT_REMAP_METHOD(runModelWithFiles,
                 }
                 else {
                     NSString *filePath = filePaths[inputIndex];
-                    data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil cropsAreRelative: cropsAreRelative];
+                    data = [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:imageCrops.count ? imageCrops[0] : nil cropsAreRelative:cropsAreRelative grayscale:grayscale];
                 }
                 [tensor copyData:data error:&error];
                 if(error != nil) {
@@ -411,7 +414,7 @@ RCT_REMAP_METHOD(tensorImageTest,
 }
 
 
--(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit {
+-(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit grayscale:(BOOL)grayscale {
     NSString *actualFilePath;
     if([filePath hasPrefix:@"file://"]) {
         actualFilePath = [filePath substringFromIndex:7];
@@ -426,15 +429,29 @@ RCT_REMAP_METHOD(tensorImageTest,
     }
     NSData *data;
     if(imageModeIsFit) {
-        data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO];
+        data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO grayscale:grayscale];
     }
     else {
-        data = [image scaledDataWithSize:shape isQuantized:NO];
+        data = [image scaledDataWithSize:shape isQuantized:NO grayscale:grayscale];
     }
     return data;
 }
 
--(NSData *)tensorImageDataForFilePath:(NSString *)filePath size:(CGSize)shape isFit:(BOOL)imageModeIsFit cropTo:(NSArray <NSNumber *>*)crop cropsAreRelative:(BOOL)cropsAreRelative {
+// -(NSData *)tensorImageDataForFilePath:(NSString *)filePath 
+//                                  size:(CGSize)shape 
+//                                 isFit:(BOOL)imageModeIsFit 
+//                                cropTo:(NSArray <NSNumber *>*)crop
+//                      cropsAreRelative:(BOOL)cropsAreRelative
+// {
+//     return [self tensorImageDataForFilePath:filePath size:shape isFit:imageModeIsFit cropTo:crop cropsAreRelative:cropsAreRelative grayscale:NO];
+// }
+-(NSData *)tensorImageDataForFilePath:(NSString *)filePath 
+                                 size:(CGSize)shape
+                                isFit:(BOOL)imageModeIsFit
+                               cropTo:(NSArray <NSNumber *>*)crop
+                     cropsAreRelative:(BOOL)cropsAreRelative
+                            grayscale:(BOOL)grayscale
+{
     NSString *actualFilePath;
     if([filePath hasPrefix:@"file://"]) {
         actualFilePath = [filePath substringFromIndex:7];
@@ -465,11 +482,23 @@ RCT_REMAP_METHOD(tensorImageTest,
         }
     }
     NSData *data;
-    if(imageModeIsFit) {
-        data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO];
+    
+    if(!grayscale) {
+        if(imageModeIsFit) {
+            data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO];
+        }
+        else {
+            data = [image scaledDataWithSize:shape isQuantized:NO];
+        }
     }
     else {
-        data = [image scaledDataWithSize:shape isQuantized:NO];
+        // If grayscale
+        if(imageModeIsFit) {
+            data = [[image imageFittedToSize:shape] scaledDataWithSize:shape isQuantized:NO grayscale:YES];
+        }
+        else {
+            data = [image scaledDataWithSize:shape isQuantized:NO grayscale:YES];
+        }
     }
     return data;
 }
