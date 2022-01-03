@@ -1,14 +1,21 @@
-require File.join(`node --print "require.resolve('react-native/package.json')"`, "../scripts/react_native_pods")
-require File.join(`node --print "require.resolve('@react-native-community/cli-platform-ios/package.json')"`, "../native_modules")
-require File.join(`node --print "require.resolve('react-native-unimodules/package.json')"`, "../cocoapods")
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+require File.join(File.dirname(`node --print "require.resolve('@react-native-community/cli-platform-ios/package.json')"`), "native_modules")
 
-platform :ios, '11.0'
+
+platform :ios, '12.0'
+
+require 'json'
+podfile_properties = JSON.parse(File.read('./Podfile.properties.json')) rescue {}
 
 target 'TensorflowLiteExample' do
-  use_unimodules!
+  use_expo_modules!
   config = use_native_modules!
 
-  use_react_native!(:path => config["reactNativePath"])
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == 'hermes'
+  )
 
   pod 'react-native-tensorflow-lite', :path => '../..'
 
@@ -16,8 +23,23 @@ target 'TensorflowLiteExample' do
   #
   # Note that if you have use_frameworks! enabled, Flipper will not work and
   # you should disable these next few lines.
-  use_flipper!({ 'Flipper' => '0.92.0' }) # Was '0.80.0'
+  use_flipper!({ 'Flipper' => '0.93.0', 'Flipper-Folly' => '2.6.7' }) # Was '0.80.0'
+  # post_install do |installer|
+  #   flipper_post_install(installer)
+  # end
   post_install do |installer|
     flipper_post_install(installer)
+    # react_native_post_install(installer)
+    # Workaround `Cycle inside FBReactNativeSpec` error for react-native 0.64
+    # Reference: https://github.com/software-mansion/react-native-screens/issues/842#issuecomment-812543933
+    installer.pods_project.targets.each do |target|
+      if (target.name&.eql?('FBReactNativeSpec'))
+        target.build_phases.each do |build_phase|
+          if (build_phase.respond_to?(:name) && build_phase.name.eql?('[CP-User] Generate Specs'))
+            target.build_phases.move(build_phase, 0)
+          end
+        end
+      end
+    end
   end
 end

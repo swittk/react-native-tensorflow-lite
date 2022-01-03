@@ -21,6 +21,7 @@ export default class App extends React.PureComponent<Props, State> {
     // const modelAsset = Asset.fromModule(require('./samplemodel.tflite'));
     const modelAsset = Asset.fromModule(require('./fullfacetwitch.tflite'));
     if (!modelAsset.downloaded) { await modelAsset.downloadAsync() };
+    console.log("modelasset", modelAsset.localUri);
     try {
       const results = await TensorflowLite.getModelInfo({
         model: modelAsset.localUri!,

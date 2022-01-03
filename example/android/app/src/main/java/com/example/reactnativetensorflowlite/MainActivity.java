@@ -1,4 +1,6 @@
 package com.example.reactnativetensorflowlite;
+import expo.modules.ReactActivityDelegateWrapper;
+import com.facebook.react.ReactActivityDelegate;
 
 import com.facebook.react.ReactActivity;
 
@@ -12,4 +14,10 @@ public class MainActivity extends ReactActivity {
   protected String getMainComponentName() {
     return "TensorflowLiteExample";
   }
+  @Override
+	  protected ReactActivityDelegate createReactActivityDelegate() {
+	    return new ReactActivityDelegateWrapper(this,
+	      new ReactActivityDelegate(this, getMainComponentName())
+	    );
+	  }
 }

@@ -1,5 +1,7 @@
 package com.reactnativetensorflowlite;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 
 import com.facebook.react.bridge.Promise;
@@ -15,6 +17,8 @@ import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.module.annotations.ReactModule;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.support.image.ImageProcessor;
 
 import java.io.File;
@@ -50,7 +54,6 @@ public class TensorflowLiteModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getModelInfo(ReadableMap args, Promise promise) {
         String modelPath = args.getString("model");
-        String files = args.getString("files");
         if(modelPath == null) {
             promise.reject("NO_MODEL_PATH", "No model path specified");
             return;
@@ -58,11 +61,8 @@ public class TensorflowLiteModule extends ReactContextBaseJavaModule {
         if(modelPath.startsWith("file:///")) {
             modelPath = modelPath.substring(7);
         }
-        if(files == null) {
-            promise.reject("NO_FILE_PATHS", "No file paths specified");
-            return;
-        }
-        try (Interpreter interpreter = new Interpreter(new File(modelPath))) {
+        File modelFile = new File(modelPath);
+        try (Interpreter interpreter = new Interpreter(modelFile)) {
           interpreter.allocateTensors();
           int tensorCount = interpreter.getInputTensorCount();
           int outTensorCount = interpreter.getOutputTensorCount();
@@ -94,7 +94,15 @@ public class TensorflowLiteModule extends ReactContextBaseJavaModule {
   @ReactMethod
   public void runModelWithFiles(ReadableMap args, Promise promise) {
     String modelPath = args.getString("model");
-    String files = args.getString("files");
+    ReadableArray filePathsArray = args.getArray("files");
+    String fileMode = args.getString("fileMode");
+    ReadableArray shapesArray = args.getArray("shapes");
+    ReadableMap groupMode = args.getMap("groupMode");
+    boolean imageModeIsFit = args.getString("imageScaleMode") == "fit";
+    ReadableArray imageCropsArray = args.getArray("imageCrops");
+    boolean cropsAreRelative = args.getString("imageCropsMode") == "relative";
+    boolean grayscale = args.getBoolean("grayScale");
+
     if(modelPath == null) {
       promise.reject("NO_MODEL_PATH", "No model path specified");
       return;
@@ -102,11 +110,11 @@ public class TensorflowLiteModule extends ReactContextBaseJavaModule {
     if(modelPath.startsWith("file:///")) {
       modelPath = modelPath.substring(7);
     }
-    if(files == null) {
+    if(filePathsArray.size() <= 0) {
       promise.reject("NO_FILE_PATHS", "No file paths specified");
       return;
     }
-    try (Interpreter interpreter = new Interpreter(new File(modelPath))) {
+    try (Interpreter interpreter = getBestInterpreter(new File(modelPath))) {
       interpreter.allocateTensors();
       int tensorCount = interpreter.getInputTensorCount();
       int outTensorCount = interpreter.getOutputTensorCount();
@@ -150,4 +158,21 @@ public class TensorflowLiteModule extends ReactContextBaseJavaModule {
     shapeMap.putArray("shape", shapeNumArr);
     return shapeMap;
   }
+
+  public Interpreter getBestInterpreter(File model) {
+    Interpreter.Options options = new Interpreter.Options();
+    CompatibilityList compatList = new CompatibilityList();
+    if(compatList.isDelegateSupportedOnThisDevice()){
+      // if the device has a supported GPU, add the GPU delegate
+      GpuDelegate.Options delegateOptions = compatList.getBestOptionsForThisDevice();
+      GpuDelegate gpuDelegate = new GpuDelegate(delegateOptions);
+      options.addDelegate(gpuDelegate);
+    } else {
+      // if the GPU is not supported, run on 4 threads
+      options.setNumThreads(4);
+    }
+    Interpreter interpreter = new Interpreter(model, options);
+    return interpreter;
+  }
+
 }

@@ -16,6 +16,7 @@
 		2D02E4BF1E0B4AB3006451C7 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
 		2DCD954D1E0B4F2C00145EB5 /* TensorflowLiteExampleTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F21AD99517003FC87E /* TensorflowLiteExampleTests.m */; };
 		4C39C56BAD484C67AA576FFA /* libPods-TensorflowLiteExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CA3E69C5B9553B26FBA2DF04 /* libPods-TensorflowLiteExample.a */; };
+		738ED45BAA8A98C17E518BA0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D533AD8565263CEA8D5EC84 /* ExpoModulesProvider.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
@@ -50,6 +51,7 @@
 		2D02E47B1E0B4A5D006451C7 /* TensorflowLiteExample-tvOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TensorflowLiteExample-tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D02E4901E0B4A5D006451C7 /* TensorflowLiteExample-tvOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TensorflowLiteExample-tvOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		47F7ED3B7971BE374F7B8635 /* Pods-TensorflowLiteExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TensorflowLiteExample.debug.xcconfig"; path = "Target Support Files/Pods-TensorflowLiteExample/Pods-TensorflowLiteExample.debug.xcconfig"; sourceTree = "<group>"; };
+		4D533AD8565263CEA8D5EC84 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-TensorflowLiteExample/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = TensorflowLiteExample/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		CA3E69C5B9553B26FBA2DF04 /* libPods-TensorflowLiteExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TensorflowLiteExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E00ACF0FDA8BF921659E2F9A /* Pods-TensorflowLiteExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TensorflowLiteExample.release.xcconfig"; path = "Target Support Files/Pods-TensorflowLiteExample/Pods-TensorflowLiteExample.release.xcconfig"; sourceTree = "<group>"; };
@@ -107,6 +109,14 @@
 			name = "Supporting Files";
 			sourceTree = "<group>";
 		};
+		0BDD1983B879D4502520FF39 /* TensorflowLiteExample */ = {
+			isa = PBXGroup;
+			children = (
+				4D533AD8565263CEA8D5EC84 /* ExpoModulesProvider.swift */,
+			);
+			name = TensorflowLiteExample;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* TensorflowLiteExample */ = {
 			isa = PBXGroup;
 			children = (
@@ -156,6 +166,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				6B9684456A2045ADE5A6E47E /* Pods */,
+				C1D10665E71C958D896A7853 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -171,6 +182,14 @@
 				2D02E4901E0B4A5D006451C7 /* TensorflowLiteExample-tvOSTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C1D10665E71C958D896A7853 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				0BDD1983B879D4502520FF39 /* TensorflowLiteExample */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -205,7 +224,7 @@
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				C1D60D28B925C94BD88E79D7 /* [CP] Copy Pods Resources */,
-				2614C1E7CE771194E6610883 /* [CP] Embed Pods Frameworks */,
+				17AB79D00032D9D6766C6079 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -348,9 +367,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh";
+			shellScript = "export NODE_BINARY=node\nexport ENTRY_FILE=index.tsx\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
-		2614C1E7CE771194E6610883 /* [CP] Embed Pods Frameworks */ = {
+		17AB79D00032D9D6766C6079 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -411,10 +430,12 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-TensorflowLiteExample/Pods-TensorflowLiteExample-resources.sh",
+				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/AccessibilityResources.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AccessibilityResources.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -477,6 +498,7 @@
 			files = (
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
+				738ED45BAA8A98C17E518BA0 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -564,7 +586,7 @@
 				DEVELOPMENT_TEAM = WX9732WYH7;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = TensorflowLiteExample/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -588,7 +610,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = WX9732WYH7;
 				INFOPLIST_FILE = TensorflowLiteExample/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
